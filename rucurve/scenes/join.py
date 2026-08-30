@@ -39,16 +39,24 @@ class JoinScene(BaseMenuScene):
     def build(self) -> None:
         w, h = self.size
         self.widgets = [
-            TextInput((48, h - 150, 240, 40), self.manual_ip,
-                      lambda t: setattr(self, "manual_ip", t), max_len=21, placeholder="IP-Adresse"),
-            Button((300, h - 150, 160, 40), "Verbinden", self._connect_manual, "primary"),
+            TextInput((48, h - 150, 300, 40), self.manual_ip,
+                      lambda t: setattr(self, "manual_ip", t), max_len=42,
+                      placeholder="IP  oder  IP:Port"),
+            Button((360, h - 150, 160, 40), "Verbinden", self._connect_manual, "primary"),
             Button((48, h - 90, 160, 40), "Zurueck", self._back, "ghost"),
         ]
         self._host_buttons: list[tuple[Button, dict]] = []
 
     # ------------------------------------------------------------------ #
     def _connect_manual(self) -> None:
-        self._connect(self.manual_ip.strip(), DEFAULT_GAME_PORT)
+        raw = self.manual_ip.strip()
+        port = DEFAULT_GAME_PORT
+        # "IP:Port" erlauben (fuer Portweiterleitung / Spiel uebers Internet)
+        if raw.count(":") == 1 and "]" not in raw:
+            host, _, p = raw.rpartition(":")
+            if p.isdigit():
+                raw, port = host, int(p)
+        self._connect(raw, port)
 
     def _connect(self, ip: str, port: int) -> None:
         self.status = f"Verbinde mit {ip}:{port} ..."
