@@ -35,23 +35,8 @@ class Audio:
         snd.play()
 
     def music(self, name: str, *, loop: bool = True) -> None:
-        if not self.ok:
-            return
-        if self._music_name == name and pygame.mixer.music.get_busy():
-            self.refresh_volume()
-            return
-        path = T.asset_path("music", f"{name}.ogg")
-        if not os.path.isfile(path):
-            path = T.asset_path("music", f"{name}.wav")
-        if not os.path.isfile(path):
-            return
-        try:
-            pygame.mixer.music.load(path)
-            pygame.mixer.music.set_volume(max(0.0, min(1.0, self.settings.music_volume)))
-            pygame.mixer.music.play(-1 if loop else 0)
-            self._music_name = name
-        except pygame.error:
-            pass
+        # Hintergrundmusik ist derzeit deaktiviert (siehe README).
+        return
 
     def stop_music(self) -> None:
         if self.ok:

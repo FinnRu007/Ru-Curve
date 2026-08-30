@@ -123,13 +123,6 @@ class ControlsScene(BaseMenuScene):
                 if not any(kf.capturing for kf, _, _ in self._keyfields):
                     self._done()
                     continue
-            used = False
-            for pu in getattr(self, "_overlay_dropdowns", []):
-                if pu.open and pu.handle_event(e):
-                    used = True
-                    break
-            if used:
-                continue
             for w in self.widgets:
                 if w.handle_event(e):
                     break

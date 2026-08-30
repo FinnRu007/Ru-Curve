@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+
 import pygame
 
 from . import theme as T
@@ -44,25 +46,45 @@ class App:
         self._pending_scene: Scene | None = None
 
     # ------------------------------------------------------------------ #
+    def _desktop_size(self) -> tuple[int, int]:
+        try:
+            return pygame.display.get_desktop_sizes()[0]
+        except Exception:
+            info = pygame.display.Info()
+            return info.current_w, info.current_h
+
+    def _fit_size(self, w: int, h: int) -> tuple[int, int]:
+        dw, dh = self._desktop_size()
+        w = min(int(w), dw - 20)
+        h = min(int(h), dh - 90)          # Platz fuer Titelleiste + Taskleiste
+        return max(900, w), max(600, h)
+
     def _build_window(self) -> None:
         s = self.config.settings
+        os.environ.setdefault("SDL_VIDEO_CENTERED", "1")
         icon_path = T.asset_path("icon.png")
         try:
-            if pygame.image.get_extended():
-                import os
-
-                if os.path.isfile(icon_path):
-                    pygame.display.set_icon(pygame.image.load(icon_path))
+            if os.path.isfile(icon_path):
+                pygame.display.set_icon(pygame.image.load(icon_path))
         except pygame.error:
             pass
         if s.fullscreen:
             self.screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
         else:
-            self.screen = pygame.display.set_mode((s.window_width, s.window_height))
+            w, h = self._fit_size(s.window_width, s.window_height)
+            self.screen = pygame.display.set_mode((w, h), pygame.RESIZABLE)
         pygame.display.set_caption("Ru-Curve")
 
     def rebuild_window(self) -> None:
         self._build_window()
+
+    def _on_resize(self, w: int, h: int) -> None:
+        w, h = max(900, w), max(600, h)
+        self.config.settings.window_width = w
+        self.config.settings.window_height = h
+        self.screen = pygame.display.set_mode((w, h), pygame.RESIZABLE)
+        if self.scene is not None and hasattr(self.scene, "resize"):
+            self.scene.resize()
 
     # ------------------------------------------------------------------ #
     def set_scene(self, scene: Scene) -> None:
@@ -90,9 +112,14 @@ class App:
         while self.running:
             dt = min(0.05, self.clock.tick(self.FPS) / 1000.0)
             events = pygame.event.get()
+            resized = None
             for e in events:
                 if e.type == pygame.QUIT:
                     self.running = False
+                elif e.type == pygame.VIDEORESIZE and not self.config.settings.fullscreen:
+                    resized = (e.w, e.h)
+            if resized is not None:
+                self._on_resize(*resized)
             if self.scene is not None:
                 self.scene.handle_events(events)
                 self.scene.update(dt)

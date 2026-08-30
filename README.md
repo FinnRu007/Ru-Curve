@@ -13,9 +13,13 @@ Zielpunktzahl erreicht, gewinnt das Match.
 
 ```bash
 pip install -r requirements.txt
-python tools/make_assets.py     # einmalig: Sounds, Musik, Icon erzeugen
+python tools/make_assets.py     # einmalig: Soundeffekte + Icon erzeugen
 python main.py
 ```
+
+Das Fenster ist frei skalierbar und startet passend zur Bildschirmgröße
+(gespeicherte Größe wird auf den Bildschirm begrenzt). Hintergrundmusik ist
+aktuell deaktiviert – nur Soundeffekte.
 
 Windows-.exe bauen: `build_exe.bat` doppelklicken → `dist/Ru-Curve.exe`.
 (GitHub Actions baut die .exe bei jedem Push nach `main` als Artifact.)
@@ -79,6 +83,7 @@ rucurve/
   config.py            GameSettings + Tastenbelegung + JSON
   session.py           Match-/Rundenmodell
   theme.py  colors.py  audio.py
+  audio.py             nur Soundeffekte (Musik deaktiviert)
   game/                world.py (Simulation), curve.py, collision.py, powerups.py, bots.py
   net/                 protocol.py, host.py, client.py, discovery.py
   scenes/              menu, lobby, settings_scene, controls, game, scoreboard,

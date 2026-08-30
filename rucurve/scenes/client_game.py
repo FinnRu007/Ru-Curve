@@ -49,6 +49,17 @@ class ClientGameScene:
     def on_exit(self) -> None:
         pass
 
+    def resize(self) -> None:
+        old = self.view
+        self.view = ArenaView(self.settings, self.app.screen.get_size())
+        try:
+            pygame.transform.smoothscale(old.surf, self.view.surf.get_size(), self.view.surf)
+        except (pygame.error, ValueError):
+            pass
+        if self._widgets:
+            w, h = self.app.screen.get_size()
+            self._widgets = [Button((w // 2 - 150, h - 110, 300, 46), "Verlassen", self._leave, "primary")]
+
     # ------------------------------------------------------------------ #
     def handle_events(self, events) -> None:
         for e in events:

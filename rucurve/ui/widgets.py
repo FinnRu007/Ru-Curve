@@ -428,33 +428,34 @@ class ScrollPanel(Widget):
     def _max_scroll(self) -> int:
         return max(0, self.content_height - self.rect.h)
 
+    def _clamp(self, v: int) -> int:
+        return max(0, min(self._max_scroll(), int(v)))
+
     def handle_event(self, e) -> bool:
         if not self.visible:
             return False
-        if e.type == pygame.MOUSEBUTTONDOWN and e.button in (4, 5) and self.rect.collidepoint(e.pos):
-            self.scroll_y = max(0, min(self._max_scroll(), self.scroll_y + (-30 if e.button == 4 else 30)))
-            return True
         if e.type == pygame.MOUSEWHEEL:
             mx, my = pygame.mouse.get_pos()
             if self.rect.collidepoint(mx, my):
-                self.scroll_y = max(0, min(self._max_scroll(), self.scroll_y - e.y * 40))
+                self.scroll_y = self._clamp(self.scroll_y - e.y * 40)
                 return True
-        # Events mit verschobenen Kind-Rects durchreichen
-        shifted = e
+        if e.type == pygame.MOUSEBUTTONDOWN and e.button in (4, 5) and self.rect.collidepoint(e.pos):
+            self.scroll_y = self._clamp(self.scroll_y + (-40 if e.button == 4 else 40))
+            return True
+
+        # Kinder bleiben in Inhaltskoordinaten; nur die Event-Position wird
+        # von Bildschirm- in Inhaltskoordinaten uebersetzt.
         if hasattr(e, "pos"):
-            if not self.rect.collidepoint(e.pos):
-                if e.type in (pygame.MOUSEBUTTONDOWN, pygame.MOUSEMOTION):
-                    # trotzdem an Kinder (z.B. um Fokus zu verlieren), aber ausserhalb
-                    pass
-            shifted = pygame.event.Event(e.type, {**e.dict, "pos": (e.pos[0], e.pos[1] + self.scroll_y)})
+            if e.type == pygame.MOUSEBUTTONDOWN and not self.rect.collidepoint(e.pos):
+                return False
+            ce = pygame.event.Event(e.type, {**e.dict, "pos": (e.pos[0], e.pos[1] + self.scroll_y)})
+        else:
+            ce = e
+
         used = False
         for c in self.children:
-            c.rect.y -= self.scroll_y
-            try:
-                if c.handle_event(shifted if hasattr(e, "pos") else e):
-                    used = True
-            finally:
-                c.rect.y += self.scroll_y
+            if c.handle_event(ce):
+                used = True
         return used
 
     def update(self, dt: float) -> None:

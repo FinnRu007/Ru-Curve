@@ -44,6 +44,16 @@ class GameScene:
     def on_exit(self) -> None:
         pass
 
+    def resize(self) -> None:
+        old = self.view
+        self.view = ArenaView(self.settings, self.app.screen.get_size())
+        try:
+            pygame.transform.smoothscale(old.surf, self.view.surf.get_size(), self.view.surf)
+        except (pygame.error, ValueError):
+            pass
+        if self.paused:
+            self._build_pause()
+
     def _broadcast_round_start(self) -> None:
         self.session.host.broadcast({
             "type": "round_start",

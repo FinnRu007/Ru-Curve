@@ -105,7 +105,7 @@ def sfx_win():
 
 
 # --------------------------------------------------------------------------- #
-def music_menu():
+def _unused_music_menu():
     dur = 8.0
     t = np.linspace(0, dur, int(SR * dur), endpoint=False)
     chord = [110.0, 164.81, 220.0, 277.18]  # A-moll-ish Pad
@@ -121,7 +121,7 @@ def music_menu():
     _write_wav(os.path.join(MUS, "menu.wav"), _stereo(m * 0.22))
 
 
-def music_game():
+def _unused_music_game():
     bpm = 124
     beat = 60.0 / bpm
     seq = [220.0, 261.63, 329.63, 261.63, 246.94, 329.63, 392.0, 329.63]
@@ -203,9 +203,6 @@ def main():
     print("Sounds:")
     for fn in (sfx_click, sfx_countdown, sfx_go, sfx_powerup, sfx_crash, sfx_win):
         fn()
-    print("Musik:")
-    music_menu()
-    music_game()
     print("Icon:")
     make_icon()
 

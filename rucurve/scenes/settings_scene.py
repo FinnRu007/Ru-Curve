@@ -47,7 +47,6 @@ GROUPS: list[tuple[str, list]] = [
     ]),
     ("Audio", [
         ("sound_volume", "Soundeffekte", 0.0, 1.0, 0.05, 2, ""),
-        ("music_volume", "Musik", 0.0, 1.0, 0.05, 2, ""),
     ]),
     ("Fenster (wirkt nach Verlassen der Seite)", [
         ("window_width", "Fensterbreite", 800, 3840, 10, 0, " px"),

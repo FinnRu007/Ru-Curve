@@ -33,6 +33,10 @@ class BaseMenuScene:
         self.widgets.clear()
         self.build()
 
+    def resize(self) -> None:
+        self.widgets.clear()
+        self.build()
+
     # -- helpers ------------------------------------------------------
     @property
     def size(self):
