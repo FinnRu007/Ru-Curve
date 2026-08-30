@@ -1,0 +1,50 @@
+name: Build Windows EXE
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Abhängigkeiten
+        run: pip install -r requirements.txt
+      - name: Headless-Tests
+        env:
+          SDL_VIDEODRIVER: dummy
+          SDL_AUDIODRIVER: dummy
+        run: |
+          python tests/test_core.py
+          python tests/test_net.py
+          python tests/test_net_game.py
+          python tests/test_smoke_app.py
+
+  build:
+    needs: test
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Abhängigkeiten installieren
+        run: pip install -r requirements.txt
+      - name: Assets erzeugen
+        run: python tools/make_assets.py
+      - name: EXE bauen
+        run: >
+          pyinstaller --noconfirm --onefile --windowed
+          --name "Ru-Curve" --icon "icon.ico"
+          --add-data "assets;assets" --collect-submodules rucurve
+          main.py
+      - name: EXE als Artifact hochladen
+        uses: actions/upload-artifact@v4
+        with:
+          name: Ru-Curve-EXE
+          path: dist/Ru-Curve.exe
