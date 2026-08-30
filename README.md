@@ -24,10 +24,12 @@ größeren Bildschirm wird alles größer dargestellt. In den Einstellungen legt
 (kleiner = stärker gezoomt / alles größer). Hintergrundmusik ist aktuell
 deaktiviert – nur Soundeffekte.
 
-Windows-Paket bauen: `build_exe.bat` doppelklicken → `dist/Ru-Curve.exe` **und**
-`dist/Ru-Curve.zip` (die ZIP zum Weitergeben/Herunterladen – umgeht den
-SmartScreen-Fehlalarm beim Download). Falls Windows Defender die EXE trotzdem
-meldet: PyInstaller-Fehlalarm, der Quellcode liegt hier offen.
+Windows-Paket bauen: `build_exe.bat` doppelklicken → Ordner `dist/Ru-Curve/`
+(darin `Ru-Curve.exe` starten) **und** `dist/Ru-Curve.zip` zum Weitergeben.
+Der Build läuft im **Ordner-Modus** (`--onedir --noupx` + Versionsinfo) – das
+löst bei Windows Defender deutlich seltener Fehlalarme aus als eine einzelne
+`--onefile`-EXE. Schlägt Defender trotzdem an: es ist ein bekannter
+PyInstaller-Fehlalarm, der komplette Quellcode liegt hier offen.
 (Optionaler GitHub-Actions-Build: siehe „CI" unten.)
 
 ## Spielen

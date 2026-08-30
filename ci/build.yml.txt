@@ -37,20 +37,18 @@ jobs:
         run: pip install -r requirements.txt
       - name: Assets erzeugen
         run: python tools/make_assets.py
-      - name: EXE bauen
+      - name: Bauen (Ordner-Modus)
         run: >
-          pyinstaller --noconfirm --onefile --windowed
-          --name "Ru-Curve" --icon "icon.ico"
+          pyinstaller --noconfirm --onedir --windowed --noupx
+          --name "Ru-Curve" --icon "icon.ico" --version-file "version.txt"
           --add-data "assets;assets" --collect-submodules rucurve
           main.py
-      - name: EXE pruefen + ZIP packen
+      - name: Pruefen + ZIP packen
         shell: pwsh
         run: |
-          $f = Get-Item dist/Ru-Curve.exe
-          "Groesse: $($f.Length) Bytes"
-          if ($f.Length -lt 3MB) { throw "EXE zu klein - Build kaputt" }
-          Copy-Item LIESMICH-Download.txt dist/LIESMICH.txt
-          Compress-Archive -Path dist/Ru-Curve.exe,dist/LIESMICH.txt -DestinationPath dist/Ru-Curve.zip -Force
+          if (-not (Test-Path 'dist/Ru-Curve/Ru-Curve.exe')) { throw "Build kaputt - EXE fehlt" }
+          Copy-Item LIESMICH-Download.txt dist/Ru-Curve/LIESMICH.txt
+          Compress-Archive -Path dist/Ru-Curve -DestinationPath dist/Ru-Curve.zip -Force
       - name: ZIP als Artifact hochladen
         uses: actions/upload-artifact@v4
         with:
