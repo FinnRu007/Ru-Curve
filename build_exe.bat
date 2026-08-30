@@ -58,7 +58,13 @@ if not exist "dist\Ru-Curve.exe" (
 )
 
 echo.
-echo [4/4] Fertig!  ->  %cd%\dist\Ru-Curve.exe
+echo [4/4] ZIP-Paket erstellen (zum Weitergeben - umgeht den Download-Fehlalarm)...
+powershell -NoProfile -Command "Copy-Item 'LIESMICH-Download.txt' 'dist\LIESMICH.txt' -ErrorAction SilentlyContinue; Compress-Archive -Path 'dist\Ru-Curve.exe','dist\LIESMICH.txt' -DestinationPath 'dist\Ru-Curve.zip' -Force -ErrorAction SilentlyContinue; if (-not (Test-Path 'dist\Ru-Curve.zip')) { Compress-Archive -Path 'dist\Ru-Curve.exe' -DestinationPath 'dist\Ru-Curve.zip' -Force }"
+
+echo.
+echo Fertig!
+echo   EXE:  %cd%\dist\Ru-Curve.exe
+echo   ZIP:  %cd%\dist\Ru-Curve.zip   (fuer den Download / zum Weitergeben)
 echo.
 pause
 exit /b 0

@@ -1,0 +1,12 @@
+Ru-Curve - Achtung die Kurve (lokal + LAN)
+
+1. Ru-Curve.exe aus diesem ZIP an einen beliebigen Ort entpacken.
+2. Doppelklick auf Ru-Curve.exe.
+
+Hinweis: Windows Defender / SmartScreen meldet fuer die EXE evtl. einen
+Fehlalarm - typisch fuer mit PyInstaller gepackte Python-Programme. Die Datei
+ist ungefaehrlich; der komplette Quellcode liegt offen auf GitHub:
+  https://github.com/FinnRu007/Ru-Curve
+Wer sichergehen will, baut die EXE mit build_exe.bat selbst.
+
+Beim ersten "Ueber LAN hosten" fragt die Windows-Firewall - auf "Zulassen".

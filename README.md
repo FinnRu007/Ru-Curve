@@ -24,7 +24,10 @@ größeren Bildschirm wird alles größer dargestellt. In den Einstellungen legt
 (kleiner = stärker gezoomt / alles größer). Hintergrundmusik ist aktuell
 deaktiviert – nur Soundeffekte.
 
-Windows-.exe bauen: `build_exe.bat` doppelklicken → `dist/Ru-Curve.exe`.
+Windows-Paket bauen: `build_exe.bat` doppelklicken → `dist/Ru-Curve.exe` **und**
+`dist/Ru-Curve.zip` (die ZIP zum Weitergeben/Herunterladen – umgeht den
+SmartScreen-Fehlalarm beim Download). Falls Windows Defender die EXE trotzdem
+meldet: PyInstaller-Fehlalarm, der Quellcode liegt hier offen.
 (Optionaler GitHub-Actions-Build: siehe „CI" unten.)
 
 ## Spielen

@@ -43,14 +43,16 @@ jobs:
           --name "Ru-Curve" --icon "icon.ico"
           --add-data "assets;assets" --collect-submodules rucurve
           main.py
-      - name: EXE pruefen
+      - name: EXE pruefen + ZIP packen
         shell: pwsh
         run: |
           $f = Get-Item dist/Ru-Curve.exe
           "Groesse: $($f.Length) Bytes"
           if ($f.Length -lt 3MB) { throw "EXE zu klein - Build kaputt" }
-      - name: EXE als Artifact hochladen
+          Copy-Item LIESMICH-Download.txt dist/LIESMICH.txt
+          Compress-Archive -Path dist/Ru-Curve.exe,dist/LIESMICH.txt -DestinationPath dist/Ru-Curve.zip -Force
+      - name: ZIP als Artifact hochladen
         uses: actions/upload-artifact@v4
         with:
-          name: Ru-Curve-EXE
-          path: dist/Ru-Curve.exe
+          name: Ru-Curve
+          path: dist/Ru-Curve.zip
