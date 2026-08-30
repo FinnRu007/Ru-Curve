@@ -33,7 +33,7 @@ class ClientGameScene:
         self.color_map = {p["pid"]: color_for(p.get("color_index", 0)) for p in self.players}
         self.names = {p["pid"]: p.get("name", "?") for p in self.players}
         self.pu_labels = {p["pid"]: powerup_label(p.get("pu", "speed")) for p in self.players}
-        self.view = ArenaView(self.settings, self.app.screen.get_size())
+        self.view = ArenaView(self.settings, self.app.screen.get_size(), len(self.players))
         self.inverted = False
         self.fog = 0.0
         self.curves = {
@@ -56,7 +56,7 @@ class ClientGameScene:
 
     def resize(self) -> None:
         old = self.view
-        self.view = ArenaView(self.settings, self.app.screen.get_size())
+        self.view = ArenaView(self.settings, self.app.screen.get_size(), len(self.players))
         try:
             pygame.transform.smoothscale(old.surf, self.view.surf.get_size(), self.view.surf)
         except (pygame.error, ValueError):

@@ -22,7 +22,7 @@ class GameScene:
         self.session = session
         self.settings = session.settings
         self.world = session.new_round(app.screen.get_size())
-        self.view = ArenaView(self.world.s, app.screen.get_size())
+        self.view = ArenaView(self.world.s, app.screen.get_size(), len(self.world.curves))
         self.color_map = {c.id: c.color for c in self.world.curves}
         self._acc = 0.0
         self._snap_acc = 0.0
@@ -49,7 +49,7 @@ class GameScene:
 
     def resize(self) -> None:
         old = self.view
-        self.view = ArenaView(self.world.s, self.app.screen.get_size())
+        self.view = ArenaView(self.world.s, self.app.screen.get_size(), len(self.world.curves))
         try:
             pygame.transform.smoothscale(old.surf, self.view.surf.get_size(), self.view.surf)
         except (pygame.error, ValueError):

@@ -19,8 +19,29 @@ try:
 except AttributeError:  # sehr alte pygame-Version
     _AAC = None
 
-_TOP = 66          # Hoehe der HUD-Leiste
 _PAD = 14
+_HUD_TOP = 12        # Rand ueber der HUD-Leiste
+_BOX_H = 48          # Hoehe einer Spieler-Karte
+_BOX_GAP = 6
+_BOX_MIN_W = 150     # darunter passen Powerup + Ladungen nicht mehr rein
+_BOX_MAX_W = 300     # bei wenigen Spielern nicht unnoetig breit werden
+_HUD_LEFT = 128      # Platz fuer "Runde N"
+
+
+def hud_layout(screen_w: int, n_players: int) -> tuple[int, int, int]:
+    """(Spalten, Zeilen, Kartenbreite) - lieber mehrzeilig als Infos weglassen."""
+    n = max(1, n_players)
+    avail = max(_BOX_MIN_W, screen_w - _HUD_LEFT - 16)
+    cols = max(1, min(n, (avail + _BOX_GAP) // (_BOX_MIN_W + _BOX_GAP)))
+    rows = -(-n // cols)                      # aufrunden
+    cols = -(-n // rows)                      # Spalten gleichmaessig fuellen
+    bw = max(96, min(_BOX_MAX_W, (avail - (cols - 1) * _BOX_GAP) // cols))
+    return cols, rows, int(bw)
+
+
+def hud_height(screen_w: int, n_players: int) -> int:
+    _c, rows, _bw = hud_layout(screen_w, n_players)
+    return _HUD_TOP + rows * (_BOX_H + _BOX_GAP) + 4
 
 
 def _disc(surf, color, x, y, r):
@@ -39,6 +60,16 @@ def _ring(surf, color, x, y, r, w):
 
 _glow_cache: dict[int, pygame.Surface] = {}
 _hole_cache: dict[int, pygame.Surface] = {}
+
+
+def _fit(font, text: str, max_w: int) -> str:
+    """Kuerzt Text mit Auslassungspunkten, bis er in max_w passt."""
+    text = str(text)
+    if font.size(text)[0] <= max_w:
+        return text
+    while text and font.size(text + "…")[0] > max_w:
+        text = text[:-1]
+    return text + "…" if text else ""
 
 
 def _hole_mask(r: int) -> pygame.Surface:
@@ -68,17 +99,19 @@ def _glow_mask(r: int) -> pygame.Surface:
 
 
 class ArenaView:
-    def __init__(self, settings, screen_size: tuple[int, int]) -> None:
+    def __init__(self, settings, screen_size: tuple[int, int], n_players: int = 1) -> None:
         self.aw = settings.arena_width
         self.ah = settings.arena_height
+        self.n_players = max(1, n_players)
         sw, sh = screen_size
+        self.top = hud_height(sw, self.n_players)
         avail_w = max(200, sw - 2 * _PAD)
-        avail_h = max(200, sh - _TOP - 2 * _PAD)
+        avail_h = max(160, sh - self.top - 2 * _PAD)
         self.scale = min(avail_w / self.aw, avail_h / self.ah)
         self.view_w = max(1, int(self.aw * self.scale))
         self.view_h = max(1, int(self.ah * self.scale))
         self.ox = (sw - self.view_w) // 2
-        self.oy = _TOP + _PAD + (avail_h - self.view_h) // 2
+        self.oy = self.top + _PAD + (avail_h - self.view_h) // 2
         self.surf = pygame.Surface((self.view_w, self.view_h)).convert()
         # wiederverwendete Flaechen fuer Nebel / Farbumkehr (nicht je Frame neu)
         self._fog_surf = pygame.Surface((self.view_w, self.view_h), pygame.SRCALPHA)
@@ -270,38 +303,66 @@ class ArenaView:
         target.blit(big, big.get_rect(center=(cx, cy)))
 
     def _draw_hud(self, target, render_curves, fonts, round_no) -> None:
-        draw_text(target, fonts.display(19), f"Runde {round_no}", T.TEXT, (24, 20))
-        n = max(1, len(render_curves))
-        left = 172
-        avail = target.get_width() - left - 12
-        bw = int(max(78, min(182, avail / n - 6)))
-        compact = bw < 160 or n >= 6
-        x = left
-        for rc in render_curves:
-            col = rc["color"]
-            box = pygame.Rect(x, 12, bw, 46)
-            pygame.draw.rect(target, T.SURFACE, box, border_radius=T.R_SM)
-            pygame.draw.rect(target, col, (box.x, box.y, 5, box.h), border_radius=2)
-            alive = rc.get("alive", True)
-            fg = T.TEXT if alive else T.TEXT_MUTED
-            if compact:
-                draw_text(target, fonts.body_bold(14), rc["name"][:8], fg, (box.x + 12, box.y + 4))
-                tail = f"{rc.get('score', 0)}" + ("" if alive else " (raus)")
-                draw_text(target, fonts.body(12), tail, T.TEXT_MUTED, (box.x + 12, box.y + 24))
+        draw_text(target, fonts.display(19), f"Runde {round_no}", T.TEXT, (24, _HUD_TOP + 8))
+        n = len(render_curves)
+        if not n:
+            return
+        cols, _rows, bw = hud_layout(target.get_width(), n)
+        for i, rc in enumerate(render_curves):
+            x = _HUD_LEFT + (i % cols) * (bw + _BOX_GAP)
+            y = _HUD_TOP + (i // cols) * (_BOX_H + _BOX_GAP)
+            self._draw_hud_card(target, fonts, pygame.Rect(x, y, bw, _BOX_H), rc)
+
+    def _draw_hud_card(self, target, fonts, box, rc) -> None:
+        alive = rc.get("alive", True)
+        col = rc["color"]
+        pygame.draw.rect(target, T.SURFACE if alive else T.SURFACE_ALT, box, border_radius=T.R_SM)
+        stripe = col if alive else tuple(int(v * 0.45 + 120 * 0.55) for v in col)
+        pygame.draw.rect(target, stripe, (box.x, box.y, 5, box.h), border_radius=2)
+
+        fg = T.TEXT if alive else T.TEXT_MUTED
+        tx = box.x + 12
+        right = box.right - 10
+
+        # --- Ladungen: Punkte solange sie passen, sonst "x N" ---
+        charges = int(rc.get("pu", 0))
+        cd = rc.get("cd", 0) or 0
+        chip_w = 0
+        if alive:
+            if charges and charges <= 5 and box.w >= 150:
+                chip_w = charges * 11 + 6
+                for k in range(charges):
+                    pygame.draw.circle(target, T.ACCENT, (right - 5 - k * 11, box.y + 15), 4)
+            elif charges:
+                img = fonts.body_bold(13).render(f"x{charges}", True, T.ACCENT)
+                target.blit(img, img.get_rect(topright=(right, box.y + 8)))
+                chip_w = img.get_width() + 6
             else:
-                name = rc["name"][:12] + ("" if alive else "  (raus)")
-                draw_text(target, fonts.body_bold(15), name, fg, (box.x + 13, box.y + 4))
-                sub = f"{rc.get('score', 0)} Pkt"
-                pul = rc.get("pu_label")
-                if pul:
-                    sub += f"  -  {pul}"
-                draw_text(target, fonts.body(12), sub[:26], T.TEXT_MUTED, (box.x + 13, box.y + 24))
-                for i in range(min(rc.get("pu", 0), 6)):
-                    pygame.draw.circle(target, T.ACCENT, (box.right - 13 - i * 12, box.y + 14), 4)
-                cd = rc.get("cd", 0)
-                if cd and cd > 0:
-                    draw_text(target, fonts.body(11), f"{cd:.0f}s", T.TEXT_MUTED, (box.right - 30, box.y + 26))
-            x += bw + 6
+                img = fonts.body(12).render("leer", True, T.TEXT_MUTED)
+                target.blit(img, img.get_rect(topright=(right, box.y + 9)))
+                chip_w = img.get_width() + 6
+            if cd > 0:
+                img = fonts.body(11).render(f"{cd:.0f}s", True, T.TEXT_MUTED)
+                target.blit(img, img.get_rect(topright=(right, box.y + 28)))
+                chip_w = max(chip_w, img.get_width() + 6)
+        else:
+            # "RAUS" ist die wichtigste Info - bekommt eine eigene Plakette
+            img = fonts.body_bold(11).render("RAUS", True, (255, 255, 255))
+            tag = img.get_rect(topright=(right, box.y + 9)).inflate(12, 6)
+            pygame.draw.rect(target, T.DANGER, tag, border_radius=999)
+            target.blit(img, img.get_rect(center=tag.center))
+            chip_w = tag.w + 6
+
+        name_w = max(30, right - chip_w - tx)
+        draw_text(target, fonts.body_bold(15), _fit(fonts.body_bold(15), rc["name"], name_w),
+                  fg, (tx, box.y + 5))
+
+        sub = f"{rc.get('score', 0)} Pkt"
+        pul = rc.get("pu_label")
+        if pul:
+            sub += " - " + pul
+        draw_text(target, fonts.body(12), _fit(fonts.body(12), sub, right - tx),
+                  T.TEXT_MUTED, (tx, box.y + 26))
 
     def _banner(self, target, fonts, text) -> None:
         cx = self.ox + self.view_w // 2

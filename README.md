@@ -75,6 +75,12 @@ neu ausgewürfelt (nur aus den aktivierten). Bots spielen standardmäßig auf
 „Zufällig". Welches Powerup man tatsächlich bekommen hat, steht im HUD neben
 den Punkten; beim Auslösen wird der Name kurz eingeblendet.
 
+Die Leiste oben zeigt für **jeden** Spieler Name, Punkte, das aktuelle Powerup,
+die verbleibenden Ladungen (Punkte bzw. „×N", sonst „leer"), die Abklingzeit und
+ein rotes **RAUS**, sobald jemand ausgeschieden ist. Passen nicht alle Karten
+nebeneinander, bricht die Leiste in mehrere Zeilen um – es wird nie etwas
+weggelassen.
+
 | Powerup | Wirkung |
 |---|---|
 | Speed-Schub | kurz deutlich schneller |

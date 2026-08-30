@@ -427,6 +427,25 @@ def test_invert_inverts_the_rendered_screen():
     assert flipped[1][0] > 200, "das dunkle Spielfeld muss hell werden"
 
 
+def test_hud_shows_all_infos_for_many_players():
+    """Regression: ab 6 Spielern fielen Powerup-Name und Ladungen weg."""
+    from rucurve.scenes.arena_render import ArenaView, hud_height, hud_layout
+
+    pygame.display.set_mode((320, 240))
+    for n in (2, 7, 12, 18):
+        cols, rows, bw = hud_layout(1366, n)
+        assert cols * rows >= n, "alle Spieler muessen eine Karte bekommen"
+        assert bw >= 150, f"Karte zu schmal fuer Powerup + Ladungen ({bw}px)"
+        assert hud_height(1366, n) >= 70
+
+    # Das Spielfeld muss unter die (ggf. mehrzeilige) Leiste rutschen
+    s = _settings(arena_width=1200, arena_height=800)
+    few = ArenaView(s, (1366, 800), 2)
+    many = ArenaView(s, (1366, 800), 18)
+    assert many.oy > few.oy, "bei vielen Spielern beginnt das Feld weiter unten"
+    assert many.oy >= many.top
+
+
 def test_protocol_roundtrip():
     r = FrameReader()
     msgs = [{"type": "hello", "a": 1}, {"type": "snapshot", "curves": [1, 2, 3]}]
