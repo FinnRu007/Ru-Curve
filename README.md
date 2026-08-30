@@ -22,7 +22,7 @@ Das Fenster ist frei skalierbar und startet passend zur Bildschirmgröße
 aktuell deaktiviert – nur Soundeffekte.
 
 Windows-.exe bauen: `build_exe.bat` doppelklicken → `dist/Ru-Curve.exe`.
-(GitHub Actions baut die .exe bei jedem Push nach `main` als Artifact.)
+(Optionaler GitHub-Actions-Build: siehe „CI" unten.)
 
 ## Spielen
 
@@ -82,14 +82,14 @@ rucurve/
   app.py               Fenster + Hauptschleife + Szenenverwaltung
   config.py            GameSettings + Tastenbelegung + JSON
   session.py           Match-/Rundenmodell
-  theme.py  colors.py  audio.py
+  theme.py  colors.py
   audio.py             nur Soundeffekte (Musik deaktiviert)
   game/                world.py (Simulation), curve.py, collision.py, powerups.py, bots.py
   net/                 protocol.py, host.py, client.py, discovery.py
   scenes/              menu, lobby, settings_scene, controls, game, scoreboard,
                        join (+ Client-Lobby), client_game, arena_render
   ui/widgets.py        handgemachte Widgets (Button, Slider, Zahlenfeld, ...)
-tools/make_assets.py   erzeugt Sounds/Musik/Icon prozedural
+tools/make_assets.py   erzeugt Soundeffekte + Icon prozedural
 ```
 
 ## CI (optional)
