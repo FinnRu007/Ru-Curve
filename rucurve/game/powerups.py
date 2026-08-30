@@ -125,13 +125,38 @@ POWERUP_BY_ID: dict[str, dict] = {p["id"]: p for p in POWERUPS}
 POWERUP_IDS: list[str] = [p["id"] for p in POWERUPS]
 DEFAULT_POWERUP = "speed"
 
+# Pseudo-Auswahl: wird zu Beginn JEDER Runde neu ausgewuerfelt.
+RANDOM_ID = "random"
+RANDOM_LABEL = "Zufaellig"
+
+# Auswahlliste fuer alle Dropdowns (Lobby, Steuerung, Client-Lobby)
+PICKER_OPTIONS: list[tuple[str, str]] = (
+    [(RANDOM_ID, RANDOM_LABEL)] + [(p["id"], p["label"]) for p in POWERUPS]
+)
+
 
 def powerup_label(pid: str) -> str:
+    if pid == RANDOM_ID:
+        return RANDOM_LABEL
     return POWERUP_BY_ID.get(pid, {"label": pid})["label"]
 
 
 def powerup_desc(pid: str) -> str:
+    if pid == RANDOM_ID:
+        return "Zu Beginn jeder Runde wird ein Powerup ausgewuerfelt."
     return POWERUP_BY_ID.get(pid, {}).get("desc", "")
+
+
+def resolve(kind: str, settings, rng=None) -> str:
+    """Loest 'Zufaellig' zu einem konkreten, aktivierten Powerup auf."""
+    if kind != RANDOM_ID and kind in POWERUP_BY_ID:
+        return kind
+    choices = settings.enabled_powerups()
+    if rng is not None:
+        return rng.choice(choices)
+    import random as _r
+
+    return _r.choice(choices)
 
 
 # --------------------------------------------------------------------------- #

@@ -70,7 +70,10 @@ Gespeichert wird alles in `%APPDATA%/Ru-Curve/config.json`.
 ## Powerups
 
 Jeder Spieler wählt in der Lobby sein Powerup, die dritte Taste löst es aus.
-Bots bekommen beim Hinzufügen ein zufälliges (aktiviertes) Powerup.
+Ganz oben in der Liste steht **Zufällig** – dann wird zu Beginn *jeder* Runde
+neu ausgewürfelt (nur aus den aktivierten). Bots spielen standardmäßig auf
+„Zufällig". Welches Powerup man tatsächlich bekommen hat, steht im HUD neben
+den Punkten; beim Auslösen wird der Name kurz eingeblendet.
 
 | Powerup | Wirkung |
 |---|---|

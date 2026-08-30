@@ -86,7 +86,7 @@ class World:
                 spot = (x, y, heading)
             placed.append(spot)
             c.x, c.y, c.heading = spot
-            c.reset_runtime(self.s)
+            c.reset_runtime(self.s, self.rng)
             c.next_gap_at = self._roll_gap() + self.s.gap_distance * 0.4
 
     # ================================================================== #

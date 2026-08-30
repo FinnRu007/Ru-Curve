@@ -10,6 +10,7 @@ import pygame
 
 from .. import theme as T
 from ..game import bots
+from ..game.powerups import powerup_label
 from ..game.world import TICK
 from ..ui.widgets import Button, draw_text
 from .arena_render import ArenaView
@@ -62,7 +63,7 @@ class GameScene:
             "round_no": self.session.round_no,
             "players": [
                 {"pid": c.id, "name": c.name, "color_index": c.color_index,
-                 "client_id": c.client_id}
+                 "client_id": c.client_id, "pu": c.pu.kind}
                 for c in self.world.curves
             ],
             "settings": asdict(self.world.s),
@@ -149,6 +150,11 @@ class GameScene:
                 self.view.reset()
             elif kind == "pu_use":
                 self.app.audio.play("powerup")
+                self._toast_for(ev[1], powerup_label(ev[2]) + "!")
+            elif kind == "pu_fail":
+                self._toast_for(ev[1], "Powerup noch nicht bereit")
+            elif kind == "pu_off":
+                self._toast_for(ev[1], "Powerup ist ausgeschaltet")
             elif kind == "go":
                 self.app.audio.play("go")
         if self.session.host:
@@ -156,6 +162,12 @@ class GameScene:
             self._pending_seg += seg
             self._pending_ev = getattr(self, "_pending_ev", [])
             self._pending_ev += [list(e) for e in events]
+
+    def _toast_for(self, cid: int, text: str) -> None:
+        """Nur fuer Spieler an DIESEM Rechner einblenden."""
+        c = self.world._by_id(cid)
+        if c is not None and c.is_local:
+            self.view.add_toast(text, c.color)
 
     def _read_local_input(self) -> None:
         keys = pygame.key.get_pressed()
@@ -247,6 +259,7 @@ class GameScene:
                 "square": c.mods().square,
                 "ghost": c.mods().ghost,
                 "shield": c.mods().shield,
+                "pu_label": powerup_label(c.pu.kind),
                 "width": self.world.s.line_width * c.mods().width,
             })
         self.view.draw(

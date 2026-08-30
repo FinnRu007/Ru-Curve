@@ -9,13 +9,13 @@ import pygame
 from .. import theme as T
 from ..colors import color_for
 from ..config import DEFAULT_GAME_PORT
-from ..game.powerups import POWERUPS, powerup_label
+from ..game.powerups import PICKER_OPTIONS, powerup_label
 from ..net.client import GameClient
 from ..net.discovery import Listener
 from ..ui.widgets import Button, Dropdown, TextInput, draw_text
 from .common import BaseMenuScene
 
-_PU_OPTIONS = [(p["id"], p["label"]) for p in POWERUPS]
+_PU_OPTIONS = PICKER_OPTIONS
 
 
 class JoinScene(BaseMenuScene):

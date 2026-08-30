@@ -6,7 +6,7 @@ import pygame
 
 from .. import theme as T
 from ..colors import PLAYER_COLORS, color_for, color_name
-from ..game.powerups import POWERUPS
+from ..game.powerups import PICKER_OPTIONS
 from ..ui.widgets import (
     Button,
     Dropdown,
@@ -18,7 +18,7 @@ from ..ui.widgets import (
 )
 from .common import BaseMenuScene
 
-_PU_OPTIONS = [(p["id"], p["label"]) for p in POWERUPS]
+_PU_OPTIONS = PICKER_OPTIONS
 
 
 class ControlsScene(BaseMenuScene):

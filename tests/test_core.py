@@ -371,6 +371,62 @@ def test_bot_difficulty_scales_survival():
     assert strong > weak * 1.3, f"starke Bots muessen laenger leben ({weak:.1f}s -> {strong:.1f}s)"
 
 
+def test_random_powerup_resolves_each_round():
+    import random as _r
+    from rucurve.game.powerups import POWERUP_BY_ID, RANDOM_ID
+
+    s = _settings(countdown_seconds=0.0)
+    c = _curve(0)
+    c.powerup_kind = RANDOM_ID
+    seen = set()
+    for seed in range(30):
+        World(s, [c], rng=_r.Random(seed))
+        assert c.pu.kind in POWERUP_BY_ID, "muss ein echtes Powerup werden"
+        assert c.pu.charges > 0
+        seen.add(c.pu.kind)
+    assert len(seen) > 3, f"sollte variieren, war aber nur {seen}"
+
+
+def test_random_powerup_respects_disabled():
+    import random as _r
+    from rucurve.game.powerups import POWERUPS, RANDOM_ID
+
+    s = _settings(countdown_seconds=0.0)
+    for meta in POWERUPS:                       # alles aus ausser "ghost"
+        s.powerup_cfg(meta["id"]).enabled = meta["id"] == "ghost"
+    c = _curve(0)
+    c.powerup_kind = RANDOM_ID
+    for seed in range(10):
+        World(s, [c], rng=_r.Random(seed))
+        assert c.pu.kind == "ghost"
+
+
+def test_invert_inverts_the_rendered_screen():
+    """Regression: die Farbumkehr muss wirklich auf dem Bild landen."""
+    from rucurve.scenes.arena_render import ArenaView
+
+    pygame.display.set_mode((320, 240))     # convert() braucht einen Video-Modus
+    s = _settings(arena_width=800, arena_height=600)
+    view = ArenaView(s, (900, 700))
+    screen = pygame.Surface((900, 700))
+    rcs = [{"id": 0, "x": 400, "y": 300, "h": 0.0, "alive": True,
+            "color": (255, 0, 0), "name": "P", "score": 0, "pu": 1, "cd": 0,
+            "width": 4.0}]
+    fonts = __import__("rucurve.theme", fromlist=["FontBook"]).FontBook()
+    # Zwei Messpunkte: heller Rand UND dunkles Spielfeld. Nur so faellt auf,
+    # wenn statt "255 - Bild" faelschlich "Bild - 255" (alles schwarz) gerechnet wird.
+    probes = [(5, 5), (view.ox + view.view_w // 2, view.oy + view.view_h - 12)]
+    view.draw(screen, rcs, fonts, phase="running", inverted=False)
+    normal = [screen.get_at(p) for p in probes]
+    view.draw(screen, rcs, fonts, phase="running", inverted=True)
+    flipped = [screen.get_at(p) for p in probes]
+    assert normal[0][0] > 200 and normal[1][0] < 60, "Messpunkte hell/dunkel erwartet"
+    for n, f in zip(normal, flipped):
+        for ch in range(3):
+            assert abs(f[ch] - (255 - n[ch])) <= 1, f"invertiert = 255 - Original ({n} -> {f})"
+    assert flipped[1][0] > 200, "das dunkle Spielfeld muss hell werden"
+
+
 def test_protocol_roundtrip():
     r = FrameReader()
     msgs = [{"type": "hello", "a": 1}, {"type": "snapshot", "curves": [1, 2, 3]}]

@@ -84,6 +84,7 @@ class ArenaView:
         self._fog_surf = pygame.Surface((self.view_w, self.view_h), pygame.SRCALPHA)
         self._invert_surf: pygame.Surface | None = None
         self._flashes: list[dict] = []
+        self._toasts: list[dict] = []
         self.reset()
 
     # ------------------------------------------------------------------ #
@@ -118,6 +119,12 @@ class ArenaView:
 
     def add_flash(self, x: float, y: float, color) -> None:
         self._flashes.append({"x": x, "y": y, "color": color, "t0": pygame.time.get_ticks()})
+
+    def add_toast(self, text: str, color=None) -> None:
+        """Kurze Einblendung, z.B. welches Powerup gerade ausgeloest hat."""
+        self._toasts = [t for t in self._toasts if t["text"] != text][-2:]
+        self._toasts.append({"text": text, "color": color or (255, 255, 255),
+                             "t0": pygame.time.get_ticks()})
 
     # ------------------------------------------------------------------ #
     def draw(self, target, render_curves: list[dict], fonts, *, countdown=0.0,
@@ -173,14 +180,20 @@ class ArenaView:
             self._countdown(target, fonts, countdown)
         if banner:
             self._banner(target, fonts, banner)
+        self._draw_toasts(target, fonts)
         if hint:
             self._hint(target, fonts, hint)
 
         if inverted:
+            # Echte Farbumkehr = 255 - Bild.  Achtung: target.blit(weiss, SUB)
+            # rechnet "Bild - 255" und macht alles schwarz. Darum andersherum:
+            # auf eine weisse Flaeche das Bild subtrahieren, dann zurueckblitten.
             if self._invert_surf is None or self._invert_surf.get_size() != target.get_size():
                 self._invert_surf = pygame.Surface(target.get_size())
-                self._invert_surf.fill((255, 255, 255))
-            target.blit(self._invert_surf, (0, 0), special_flags=pygame.BLEND_RGB_SUB)
+            inv = self._invert_surf
+            inv.fill((255, 255, 255))
+            inv.blit(target, (0, 0), special_flags=pygame.BLEND_RGB_SUB)
+            target.blit(inv, (0, 0))
 
     # ------------------------------------------------------------------ #
     def _draw_flashes(self, target) -> None:
@@ -214,6 +227,26 @@ class ArenaView:
             hy = int(rc["y"] * self.scale) - r
             fog.blit(hole, (hx, hy), special_flags=pygame.BLEND_RGBA_SUB)
         target.blit(fog, (self.ox, self.oy))
+
+    def _draw_toasts(self, target, fonts) -> None:
+        now = pygame.time.get_ticks()
+        keep = []
+        y = self.oy + 16
+        for t in self._toasts:
+            age = (now - t["t0"]) / 1500.0
+            if age >= 1.0:
+                continue
+            keep.append(t)
+            alpha = int(255 * min(1.0, (1.0 - age) * 3))
+            img = fonts.body_bold(19).render(t["text"], True, t["color"])
+            box = img.get_rect(midtop=(self.ox + self.view_w // 2, y)).inflate(34, 16)
+            bg = pygame.Surface(box.size, pygame.SRCALPHA)
+            pygame.draw.rect(bg, (10, 12, 18, min(210, alpha)), bg.get_rect(), border_radius=999)
+            target.blit(bg, box)
+            img.set_alpha(alpha)
+            target.blit(img, img.get_rect(midtop=(self.ox + self.view_w // 2, y + 8)))
+            y += box.h + 6
+        self._toasts = keep
 
     def _hint(self, target, fonts, text) -> None:
         cx = self.ox + self.view_w // 2
@@ -257,8 +290,12 @@ class ArenaView:
                 draw_text(target, fonts.body(12), tail, T.TEXT_MUTED, (box.x + 12, box.y + 24))
             else:
                 name = rc["name"][:12] + ("" if alive else "  (raus)")
-                draw_text(target, fonts.body_bold(15), name, fg, (box.x + 13, box.y + 5))
-                draw_text(target, fonts.body(13), f"{rc.get('score', 0)} Pkt", T.TEXT_MUTED, (box.x + 13, box.y + 25))
+                draw_text(target, fonts.body_bold(15), name, fg, (box.x + 13, box.y + 4))
+                sub = f"{rc.get('score', 0)} Pkt"
+                pul = rc.get("pu_label")
+                if pul:
+                    sub += f"  -  {pul}"
+                draw_text(target, fonts.body(12), sub[:26], T.TEXT_MUTED, (box.x + 13, box.y + 24))
                 for i in range(min(rc.get("pu", 0), 6)):
                     pygame.draw.circle(target, T.ACCENT, (box.right - 13 - i * 12, box.y + 14), 4)
                 cd = rc.get("cd", 0)

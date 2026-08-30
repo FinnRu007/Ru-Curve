@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections import deque
 from typing import NamedTuple
 
+from . import powerups as _pu
 from .powerups import DEFAULT_POWERUP, PowerupState
 
 
@@ -70,7 +71,7 @@ class Curve:
         self.pu = PowerupState(powerup_kind, 0)
 
     # ------------------------------------------------------------------ #
-    def reset_runtime(self, settings) -> None:
+    def reset_runtime(self, settings, rng=None) -> None:
         self.alive = True
         self.place = 0
         self.turn = 0
@@ -84,9 +85,10 @@ class Curve:
         self.dist_travelled = 0.0
         self.pending.clear()
         self.effects.clear()
-        cfg = settings.powerup_cfg(self.powerup_kind)
+        kind = _pu.resolve(self.powerup_kind, settings, rng)
+        cfg = settings.powerup_cfg(kind)
         charges = cfg.charges if cfg.enabled else 0
-        self.pu = PowerupState(self.powerup_kind, charges, cfg.cooldown)
+        self.pu = PowerupState(kind, charges, cfg.cooldown)
 
     # ------------------------------------------------------------------ #
     def mods(self) -> Mods:

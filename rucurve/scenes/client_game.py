@@ -6,7 +6,8 @@ import pygame
 
 from .. import theme as T
 from ..colors import color_for
-from ..config import GameSettings, _from_dict
+from ..config import GameSettings, settings_from_dict
+from ..game.powerups import powerup_label
 from ..ui.widgets import Button, draw_text
 from .arena_render import ArenaView
 
@@ -26,16 +27,18 @@ class ClientGameScene:
 
     # ------------------------------------------------------------------ #
     def _load_round(self, msg: dict) -> None:
-        self.settings = _from_dict(GameSettings, msg.get("settings", {})).clamped()
+        self.settings = settings_from_dict(msg.get("settings", {})).clamped()
         self.players = msg.get("players", [])
         self.round_no = msg.get("round_no", 1)
         self.color_map = {p["pid"]: color_for(p.get("color_index", 0)) for p in self.players}
         self.names = {p["pid"]: p.get("name", "?") for p in self.players}
+        self.pu_labels = {p["pid"]: powerup_label(p.get("pu", "speed")) for p in self.players}
         self.view = ArenaView(self.settings, self.app.screen.get_size())
         self.inverted = False
+        self.fog = 0.0
         self.curves = {
             p["pid"]: {"x": 0.0, "y": 0.0, "h": 0.0, "alive": True, "pu": 0, "cd": 0, "score": 0,
-                       "boost": False, "square": False, "ghost": False}
+                       "boost": False, "square": False, "ghost": False, "shield": False}
             for p in self.players
         }
         self.my_pids = [p["pid"] for p in self.players if p.get("client_id") == self.cid]
@@ -118,6 +121,7 @@ class ClientGameScene:
         self.phase = msg.get("phase", self.phase)
         self.countdown = msg.get("countdown", 0.0)
         self.inverted = bool(msg.get("inv", False))
+        self.fog = float(msg.get("fog", 0.0))
         for cd in msg.get("curves", []):
             slot = self.curves.get(cd["id"])
             if slot is None:
@@ -125,7 +129,7 @@ class ClientGameScene:
             slot.update(x=cd["x"], y=cd["y"], h=cd["h"], alive=cd["alive"],
                         pu=cd.get("pu", 0), cd=cd.get("cd", 0), score=cd.get("score", 0),
                         boost=cd.get("boost", False), square=cd.get("square", False),
-                        ghost=cd.get("ghost", False))
+                        ghost=cd.get("ghost", False), shield=cd.get("shield", False))
         self.view.apply_segments(msg.get("seg", []), self.color_map)
         for ev in msg.get("ev", []):
             if not ev:
@@ -134,8 +138,19 @@ class ClientGameScene:
                 self.app.audio.play("crash")
                 if len(ev) >= 4:
                     self.view.add_flash(ev[2], ev[3], self.color_map.get(ev[1], (255, 255, 255)))
+            elif ev[0] == "shield":
+                self.app.audio.play("powerup")
+                if len(ev) >= 4:
+                    self.view.add_flash(ev[2], ev[3], (255, 255, 255))
+            elif ev[0] == "clear":
+                self.view.reset()
             elif ev[0] == "pu_use":
                 self.app.audio.play("powerup")
+                if len(ev) >= 3 and ev[1] in self.my_pids:
+                    self.view.add_toast(powerup_label(ev[2]) + "!",
+                                        self.color_map.get(ev[1], (255, 255, 255)))
+            elif ev[0] == "pu_fail" and len(ev) >= 2 and ev[1] in self.my_pids:
+                self.view.add_toast("Powerup noch nicht bereit")
             elif ev[0] == "go":
                 self.app.audio.play("go")
 
@@ -160,12 +175,15 @@ class ClientGameScene:
                 "name": self.names.get(pid, "?"), "score": c["score"],
                 "pu": c["pu"], "cd": c["cd"], "boost": c["boost"],
                 "square": c.get("square", False), "ghost": c.get("ghost", False),
+                "shield": c.get("shield", False),
+                "pu_label": self.pu_labels.get(pid, ""),
                 "width": self.settings.line_width,
             })
         self.view.draw(surf, rcs, self.app.fonts, countdown=self.countdown,
                        round_no=self.round_no, phase=self.phase if self.phase != "match_over" else "finished",
                        banner=self.banner if self.phase in ("finished", "match_over") else None,
-                       inverted=self.inverted and self.phase == "running")
+                       inverted=self.inverted and self.phase == "running",
+                       fog=self.fog if self.phase == "running" else 0.0)
 
         if self.phase == "match_over" and self.match_winner:
             w, h = surf.get_size()

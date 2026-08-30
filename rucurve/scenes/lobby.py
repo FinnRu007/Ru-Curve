@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import random
 import socket
 from dataclasses import asdict
 
@@ -11,14 +10,14 @@ import pygame
 from .. import theme as T
 from ..colors import PLAYER_COLORS, color_for
 from ..config import DEFAULT_GAME_PORT
-from ..game.powerups import POWERUPS, powerup_label
+from ..game.powerups import PICKER_OPTIONS, RANDOM_ID, powerup_label
 from ..net.discovery import Beacon, local_ip
 from ..net.host import GameHost
 from ..session import GameSession, PlayerDef
 from ..ui.widgets import Button, Dropdown, TextInput, draw_text
 from .common import BaseMenuScene
 
-_PU_OPTIONS = [(p["id"], p["label"]) for p in POWERUPS]
+_PU_OPTIONS = PICKER_OPTIONS
 
 
 class LobbyScene(BaseMenuScene):
@@ -87,8 +86,8 @@ class LobbyScene(BaseMenuScene):
         self._next_pid = pid
 
     def _random_powerup(self) -> str:
-        """Bots bekommen ein zufaelliges (aktiviertes) Powerup."""
-        return random.choice(self.app.config.settings.enabled_powerups())
+        """Bots spielen auf 'Zufaellig' - dann wuerfeln sie jede Runde neu."""
+        return RANDOM_ID
 
     @staticmethod
     def _free_color(used: set[int]) -> int:
