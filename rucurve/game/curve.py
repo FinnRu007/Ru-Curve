@@ -43,6 +43,8 @@ class Curve:
         self.turn = 0                     # -1 links, 0, +1 rechts
         self.powerup_pressed = False
         self._pu_edge = False
+        self._sq_prev_turn = 0            # fuer das "Eckig"-Powerup
+        self._sq_lock = 0.0
 
         self.dist_since_gap = 0.0
         self.next_gap_at = 1e9
@@ -59,6 +61,8 @@ class Curve:
         self.turn = 0
         self.powerup_pressed = False
         self._pu_edge = False
+        self._sq_prev_turn = 0
+        self._sq_lock = 0.0
         self.dist_since_gap = 0.0
         self.gap_left = 0.0
         self.dist_travelled = 0.0

@@ -65,7 +65,11 @@ class GameSettings:
     round_time_limit: float = 0.0    # 0 = kein Zeitlimit
 
     # Arena
-    arena_width: int = 1500
+    # arena_size = Hoehe des Spielfelds in Spiel-Einheiten. Die Breite ergibt
+    # sich aus dem Seitenverhaeltnis des Fensters, damit das Feld den Bildschirm
+    # fuellt und auf grossen Monitoren alles groesser dargestellt wird.
+    arena_size: int = 950
+    arena_width: int = 1500      # zur Laufzeit aus arena_size + Fenster berechnet
     arena_height: int = 900
 
     # Bots
@@ -85,6 +89,13 @@ class GameSettings:
         """Winkelgeschwindigkeit in rad/s aus Geschwindigkeit und Lenkradius."""
         return self.speed / max(1.0, self.turn_radius)
 
+    def arena_dims(self, view_w: int, view_h: int) -> tuple[int, int]:
+        """Spielfeld-Groesse (Einheiten) aus arena_size + Fenster-Seitenverhaeltnis."""
+        h = int(self.arena_size)
+        aspect = max(0.55, min(2.6, view_w / max(1, view_h)))
+        w = int(round(h * aspect))
+        return max(600, min(4000, w)), max(400, min(4000, h))
+
     def clamped(self) -> "GameSettings":
         c = GameSettings(**asdict(self))
         c.speed = _clamp(c.speed, 30, 400)
@@ -101,6 +112,7 @@ class GameSettings:
         c.target_score = int(_clamp(c.target_score, 1, 500))
         c.countdown_seconds = _clamp(c.countdown_seconds, 0.0, 10)
         c.round_time_limit = _clamp(c.round_time_limit, 0.0, 600)
+        c.arena_size = int(_clamp(c.arena_size, 550, 1800))
         c.arena_width = int(_clamp(c.arena_width, 600, 4000))
         c.arena_height = int(_clamp(c.arena_height, 400, 4000))
         c.bot_count = int(_clamp(c.bot_count, 0, 11))

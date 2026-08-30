@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import random
 from dataclasses import dataclass, field
 
@@ -63,9 +64,13 @@ class GameSession:
         if not self.curves:
             self.curves = [curve_from_def(p) for p in self.players]
 
-    def new_round(self) -> World:
+    def new_round(self, view_size: tuple[int, int] | None = None) -> World:
         self.round_no += 1
-        self.world = World(self.settings, self.curves, rng=random.Random())
+        ws = self.settings
+        if view_size:
+            w, h = self.settings.arena_dims(*view_size)
+            ws = dataclasses.replace(self.settings, arena_width=w, arena_height=h)
+        self.world = World(ws, self.curves, rng=random.Random())
         return self.world
 
     def match_winner(self) -> Curve | None:

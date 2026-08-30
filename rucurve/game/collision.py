@@ -63,14 +63,23 @@ class CollisionGrid:
         return bool(np.any(sub[mask] != 0))
 
     def ray_distance(self, x: float, y: float, angle: float, max_dist: float, r: float, step: float | None = None) -> float:
-        """Entfernung bis zum ersten Hindernis entlang eines Strahls (fuer die Bot-KI)."""
+        """Entfernung bis zum ersten Hindernis entlang eines Strahls (fuer die Bot-KI).
+
+        Punkt-Abtastung (kein Scheiben-Test) und vektorisiert - schnell genug fuer
+        viele Bots pro Tick."""
         import math
 
-        step = step or max(2.0, r * 1.2)
-        cx, sy = math.cos(angle), math.sin(angle)
-        d = 0.0
-        while d <= max_dist:
-            if self.hits(x + cx * d, y + sy * d, r):
-                return d
-            d += step
-        return max_dist
+        step = step or 7.0
+        n = max(2, int(max_dist / step) + 1)
+        ds = np.arange(n, dtype=np.float32) * step
+        xs = x + math.cos(angle) * ds
+        ys = y + math.sin(angle) * ds
+        margin = max(1.0, r)
+        oob = (xs < margin) | (ys < margin) | (xs >= self.w - margin) | (ys >= self.h - margin)
+        ix = np.clip(xs.astype(np.int32), 0, self.w - 1)
+        iy = np.clip(ys.astype(np.int32), 0, self.h - 1)
+        hit = (self.grid[iy, ix] != 0) | oob
+        idx = int(np.argmax(hit))
+        if hit[idx]:
+            return float(ds[idx])
+        return float(max_dist)

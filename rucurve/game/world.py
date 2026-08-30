@@ -143,10 +143,24 @@ class World:
         turn_rate = s.turn_rate()          # aus der Grundgeschwindigkeit -> Radius bleibt stabil
         radius = s.line_width * 0.5 * width_mult
 
+        square = any(e[0] == "square" for e in c.effects)
+        if square:
+            # Eckig: jede neue Tasten-Betaetigung dreht um exakt 90 Grad
+            c._sq_lock = max(0.0, c._sq_lock - TICK)
+            if c.turn != 0 and c._sq_prev_turn == 0 and c._sq_lock <= 0.0:
+                q = math.pi / 2
+                c.heading = round((c.heading + c.turn * q) / q) * q
+                c._sq_lock = 0.12
+            c._sq_prev_turn = c.turn
+            dh = 0.0
+        else:
+            c._sq_prev_turn = 0
+
         dist = speed * TICK
         steps = max(1, math.ceil(dist / max(0.75, s.line_width * 0.5)))
         ds = dist / steps
-        dh = c.turn * turn_rate * TICK / steps
+        if not square:
+            dh = c.turn * turn_rate * TICK / steps
 
         for _ in range(steps):
             c.heading += dh
@@ -205,7 +219,7 @@ class World:
         c.alive = False
         self._death_order.append(c.id)
         self._commit_pending(c, force=True)
-        self.events.append(("death", c.id))
+        self.events.append(("death", c.id, round(c.x, 1), round(c.y, 1)))
 
     # ================================================================== #
     #  Rundenende + Punkte
@@ -263,11 +277,15 @@ class World:
         ev, self.events = self.events, []
         return ev
 
+    def screen_inverted(self) -> bool:
+        return any(e[0] == "invert" for c in self.curves for e in c.effects)
+
     def snapshot(self) -> dict:
         return {
             "phase": self.phase,
             "countdown": round(self.countdown, 2),
             "time": round(self.time, 2),
+            "inv": self.screen_inverted(),
             "curves": [
                 {
                     "id": c.id,
@@ -279,6 +297,8 @@ class World:
                     "cd": round(c.pu.cooldown_left, 1),
                     "score": c.score,
                     "boost": any(e[0] == "speed" for e in c.effects),
+                    "square": any(e[0] == "square" for e in c.effects),
+                    "ghost": c.effect_mods()[2],
                 }
                 for c in self.curves
             ],

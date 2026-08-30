@@ -20,8 +20,8 @@ class GameScene:
         self.app = app
         self.session = session
         self.settings = session.settings
-        self.world = session.new_round()
-        self.view = ArenaView(self.settings, app.screen.get_size())
+        self.world = session.new_round(app.screen.get_size())
+        self.view = ArenaView(self.world.s, app.screen.get_size())
         self.color_map = {c.id: c.color for c in self.world.curves}
         self._acc = 0.0
         self._snap_acc = 0.0
@@ -46,7 +46,7 @@ class GameScene:
 
     def resize(self) -> None:
         old = self.view
-        self.view = ArenaView(self.settings, self.app.screen.get_size())
+        self.view = ArenaView(self.world.s, self.app.screen.get_size())
         try:
             pygame.transform.smoothscale(old.surf, self.view.surf.get_size(), self.view.surf)
         except (pygame.error, ValueError):
@@ -63,7 +63,7 @@ class GameScene:
                  "client_id": c.client_id}
                 for c in self.world.curves
             ],
-            "settings": asdict(self.settings),
+            "settings": asdict(self.world.s),
         })
 
     # ------------------------------------------------------------------ #
@@ -102,11 +102,11 @@ class GameScene:
         self._pump_network()
 
         if self.world.phase in ("countdown", "running"):
+            self._read_bot_input()          # einmal pro Frame reicht (spart Rechenzeit)
             self._acc += dt
             steps = 0
             while self._acc >= TICK and steps < 6:
                 self._read_local_input()
-                self._read_bot_input()
                 self.world.step()
                 self._acc -= TICK
                 steps += 1
@@ -126,6 +126,9 @@ class GameScene:
             kind = ev[0]
             if kind == "death":
                 self.app.audio.play("crash")
+                if len(ev) >= 4:
+                    c = self.world._by_id(ev[1])
+                    self.view.add_flash(ev[2], ev[3], c.color if c else (255, 255, 255))
             elif kind == "pu_use":
                 self.app.audio.play("powerup")
             elif kind == "go":
@@ -213,7 +216,9 @@ class GameScene:
                 "alive": c.alive, "color": c.color, "name": c.name,
                 "score": c.score, "pu": c.pu.charges, "cd": c.pu.cooldown_left,
                 "boost": any(e[0] == "speed" for e in c.effects),
-                "width": self.settings.line_width,
+                "square": any(e[0] == "square" for e in c.effects),
+                "ghost": c.effect_mods()[2],
+                "width": self.world.s.line_width,
             })
         self.view.draw(
             surf, rcs, self.app.fonts,
@@ -221,6 +226,7 @@ class GameScene:
             round_no=self.session.round_no,
             phase=self.world.phase,
             banner=self._banner if self.world.phase == "finished" else None,
+            inverted=self.world.screen_inverted() and self.world.phase == "running",
         )
         if self.paused:
             self._draw_pause(surf)

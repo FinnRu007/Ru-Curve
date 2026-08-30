@@ -37,9 +37,8 @@ GROUPS: list[tuple[str, list]] = [
         ("countdown_seconds", "Countdown", 0.0, 10, 0.5, 1, " s"),
         ("round_time_limit", "Zeitlimit (0 = keins)", 0.0, 600, 10, 0, " s"),
     ]),
-    ("Arena", [
-        ("arena_width", "Breite", 600, 4000, 20, 0, " px"),
-        ("arena_height", "Hoehe", 400, 4000, 20, 0, " px"),
+    ("Spielfeld", [
+        ("arena_size", "Groesse (kleiner = alles groesser)", 550, 1800, 25, 0, ""),
     ]),
     ("Bots", [
         ("bot_count", "Anzahl Bots (Standard)", 0, 11, 1, 0, ""),

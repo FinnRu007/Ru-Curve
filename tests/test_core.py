@@ -130,6 +130,92 @@ def test_speed_powerup_boosts_and_consumes_charge():
     assert c.pu.charges == 1
 
 
+def test_square_powerup_snaps_heading_to_90deg():
+    import math
+
+    s = GameSettings(countdown_seconds=0.0, powerup_charges=1, powerup_duration=3.0,
+                     gap_distance=99999, arena_width=2400, arena_height=1600)
+    c = _curve(0)
+    c.powerup_kind = "square"
+    w = World(s, [c])
+    c.x, c.y, c.heading = 1200, 800, 0.3
+    c.reset_runtime(1)
+    w.step()
+    w.set_input(0, False, False, True)
+    w.step()
+    w.set_input(0, False, False, False)
+    # nach dem Aktivieren ist der Kurs auf ein Vielfaches von 90 Grad gerastet
+    q = math.pi / 2
+    assert abs((c.heading / q) - round(c.heading / q)) < 1e-6
+    # eine Rechts-Betaetigung dreht um genau 90 Grad
+    h0 = c.heading
+    w.set_input(0, False, True, False)
+    w.step()
+    assert abs(abs(c.heading - h0) - q) < 1e-6
+
+
+def test_extra_gap_powerup_opens_a_gap():
+    s = GameSettings(countdown_seconds=0.0, powerup_charges=1, gap_distance=99999,
+                     gap_size=40, arena_width=2400, arena_height=1600)
+    c = _curve(0)
+    c.powerup_kind = "extra_gap"
+    w = World(s, [c])
+    c.x, c.y, c.heading = 1200, 800, 0.0
+    c.reset_runtime(1)
+    w.step()
+    w.set_input(0, False, False, True)
+    w.step()
+    assert c.gap_left > 60
+
+
+def test_invert_powerup_sets_screen_flag():
+    s = GameSettings(countdown_seconds=0.0, powerup_charges=1, powerup_duration=2.0,
+                     gap_distance=99999, arena_width=2400, arena_height=1600)
+    c = _curve(0)
+    c.powerup_kind = "invert"
+    w = World(s, [c])
+    c.x, c.y, c.heading = 1200, 800, 0.0
+    c.reset_runtime(1)
+    w.step()
+    assert not w.screen_inverted()
+    w.set_input(0, False, False, True)
+    w.step()
+    assert w.screen_inverted()
+
+
+def test_arena_dims_follow_window_aspect():
+    s = GameSettings(arena_size=900)
+    w, h = s.arena_dims(1920, 1080)
+    assert h == 900
+    assert 1550 <= w <= 1650   # ~ 16:9
+    w2, h2 = s.arena_dims(1024, 1280)
+    assert w2 < w2 + 1 and w2 < h2   # Hochformat -> schmaler
+
+
+def test_bots_react_earlier_survive_longer_than_wall_dash():
+    from rucurve.game import bots
+
+    s = GameSettings(countdown_seconds=0.0, gap_distance=99999,
+                     arena_width=1600, arena_height=1000)
+    survived = []
+    for _ in range(5):
+        cs = [_curve(i) for i in range(3)]
+        for c in cs:
+            c.is_bot = True
+        w = World(s, cs)
+        for _ in range(60 * 30):
+            for c in cs:
+                if c.alive:
+                    l, r, p = bots.control_bot(w, c, 0.7)
+                    w.set_input(c.id, l, r, p)
+            w.step()
+            if w.phase == "finished":
+                break
+        survived.append(w.time)
+    # gute Bots halten deutlich laenger als die ~2-3 s bis zur Wand
+    assert max(survived) > 6.0
+
+
 def test_protocol_roundtrip():
     r = FrameReader()
     msgs = [{"type": "hello", "a": 1}, {"type": "snapshot", "curves": [1, 2, 3]}]

@@ -17,9 +17,12 @@ python tools/make_assets.py     # einmalig: Soundeffekte + Icon erzeugen
 python main.py
 ```
 
-Das Fenster ist frei skalierbar und startet passend zur Bildschirmgröße
-(gespeicherte Größe wird auf den Bildschirm begrenzt). Hintergrundmusik ist
-aktuell deaktiviert – nur Soundeffekte.
+Das Fenster ist frei skalierbar und startet passend zur Bildschirmgröße. Das
+Spielfeld füllt das Fenster und passt sein Seitenverhältnis an – auf einem
+größeren Bildschirm wird alles größer dargestellt. In den Einstellungen legt
+`Spielfeld → Größe` fest, wie viel Fläche das Feld in Spiel-Einheiten hat
+(kleiner = stärker gezoomt / alles größer). Hintergrundmusik ist aktuell
+deaktiviert – nur Soundeffekte.
 
 Windows-.exe bauen: `build_exe.bat` doppelklicken → `dist/Ru-Curve.exe`.
 (Optionaler GitHub-Actions-Build: siehe „CI" unten.)
@@ -56,14 +59,15 @@ Stärke der Bots, Lautstärken, Fenstergröße / Vollbild. Wird als
 
 Am Anfang wählt jeder Spieler sein Powerup (dritte Taste aktiviert es):
 
-| Powerup          | Wirkung                                        | Status |
-|------------------|------------------------------------------------|--------|
-| Speed-Schub      | kurz deutlich schneller                        | fertig |
-| Dünne Linie      | eigene Linie kurz halb so breit                | fertig |
-| Geist            | kurz durch alle Linien (zieht keine Spur)      | fertig |
-| Gegner bremsen   | alle anderen kurz langsamer                    | fertig |
-| Eckig            | 90°-Kurven                                     | geplant |
-| Extra-Lücke      | erzwingt sofort eine große Lücke               | geplant |
+| Powerup          | Wirkung                                             |
+|------------------|----------------------------------------------------|
+| Speed-Schub      | kurz deutlich schneller                             |
+| Dünne Linie      | eigene Linie kurz halb so breit                     |
+| Geist            | kurz durch alle Linien (zieht keine Spur)           |
+| Gegner bremsen   | alle anderen kurz langsamer                         |
+| Eckig            | nur noch 90°-Ecken – jede Tastenbetätigung = ein Knick |
+| Extra-Lücke      | erzeugt sofort eine große Lücke in der eigenen Spur |
+| Farben umkehren  | invertiert für alle den ganzen Bildschirm – verwirrt die Gegner |
 
 ## Tests
 

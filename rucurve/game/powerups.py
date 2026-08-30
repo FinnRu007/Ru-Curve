@@ -33,15 +33,21 @@ POWERUPS: list[dict] = [
     },
     {
         "id": "square",
-        "label": "Eckig (bald)",
-        "desc": "90-Grad-Kurven statt runder Kurven. Noch nicht verfuegbar.",
-        "implemented": False,
+        "label": "Eckig",
+        "desc": "Kurze Zeit nur 90-Grad-Ecken statt runder Kurven.",
+        "implemented": True,
     },
     {
         "id": "extra_gap",
-        "label": "Extra-Luecke (bald)",
-        "desc": "Erzwingt sofort eine grosse Luecke. Noch nicht verfuegbar.",
-        "implemented": False,
+        "label": "Extra-Luecke",
+        "desc": "Erzeugt sofort eine grosse Luecke in deiner Spur.",
+        "implemented": True,
+    },
+    {
+        "id": "invert",
+        "label": "Farben umkehren",
+        "desc": "Kehrt fuer alle die Bildschirmfarben um - verwirrt die Gegner.",
+        "implemented": True,
     },
 ]
 
@@ -94,5 +100,17 @@ def activate(world, curve) -> None:
         for other in world.curves:
             if other.alive and other.id != curve.id:
                 other.effects.append(["slow", dur, 0.55])
+    elif st.kind == "square":
+        import math
+
+        q = math.pi / 2
+        curve.heading = round(curve.heading / q) * q
+        curve._sq_prev_turn = 0
+        curve._sq_lock = 0.0
+        curve.effects.append(["square", dur, 1.0])
+    elif st.kind == "invert":
+        curve.effects.append(["invert", dur, 1.0])
+    elif st.kind == "extra_gap":
+        curve.gap_left = max(world.s.gap_size * 3.0, 130.0)
 
     world.events.append(("pu_use", curve.id, st.kind))
