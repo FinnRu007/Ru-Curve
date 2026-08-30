@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import random
 import socket
 from dataclasses import asdict
 
@@ -79,10 +80,15 @@ class LobbyScene(BaseMenuScene):
         for b in range(self.app.config.settings.bot_count):
             ci = self._free_color(used_colors)
             used_colors.add(ci)
-            self.players.append(PlayerDef(pid, f"Bot {b + 1}", ci, "speed", is_bot=True,
+            self.players.append(PlayerDef(pid, f"Bot {b + 1}", ci, self._random_powerup(),
+                                          is_bot=True,
                                           difficulty=self.app.config.settings.bot_difficulty))
             pid += 1
         self._next_pid = pid
+
+    def _random_powerup(self) -> str:
+        """Bots bekommen ein zufaelliges (aktiviertes) Powerup."""
+        return random.choice(self.app.config.settings.enabled_powerups())
 
     @staticmethod
     def _free_color(used: set[int]) -> int:
@@ -180,7 +186,8 @@ class LobbyScene(BaseMenuScene):
         used = {p.color_index for p in self.players}
         ci = self._free_color(used)
         n = sum(1 for p in self.players if p.is_bot) + 1
-        self.players.append(PlayerDef(self._next_pid, f"Bot {n}", ci, "speed", is_bot=True,
+        self.players.append(PlayerDef(self._next_pid, f"Bot {n}", ci, self._random_powerup(),
+                                      is_bot=True,
                                       difficulty=self.app.config.settings.bot_difficulty))
         self._next_pid += 1
         self.build()

@@ -53,26 +53,48 @@ LAN koppeln.)
 
 ## Einstellungen
 
-Menü **Einstellungen** – alles frei justierbar, um das Gameplay zu tunen:
-Geschwindigkeit, Lenkradius, Linienbreite, Lücken-Abstand und -Größe,
-Powerup-Dauer / -Stärke / -Ladungen / -Abklingzeit, Punkte pro Gegner,
-Zielpunktzahl, Countdown, Zeitlimit, Selbstkollision, Arena-Größe, Anzahl und
-Stärke der Bots, Lautstärken, Fenstergröße / Vollbild. Wird als
-`%APPDATA%/Ru-Curve/config.json` gespeichert.
+Menü **Einstellungen** – in fünf aufklappbare Bereiche sortiert (Bereich
+anklicken zum Auf-/Zuklappen), jeder Wert als Schieberegler **und** Zahlenfeld:
+
+* **System** – Spielfeld-Größe, Fenstergröße, Vollbild
+* **Sound** – Lautstärke der Soundeffekte
+* **Spiel** – Geschwindigkeit, Lenkradius, Linienbreite, Lücken-Abstand und
+  -Größe, Punkte pro Gegner, Zielpunktzahl, Countdown, Zeitlimit,
+  Selbstkollision
+* **Bots** – Anzahl beim Start, Stärke (0 = harmlos, 1.0 = sehr stark)
+* **Powerups** – jedes Powerup einzeln: An/Aus, Wirkdauer, Stärke, Ladungen pro
+  Runde und Abklingzeit; dazu „Alle an" / „Alle aus"
+
+Gespeichert wird alles in `%APPDATA%/Ru-Curve/config.json`.
 
 ## Powerups
 
-Am Anfang wählt jeder Spieler sein Powerup (dritte Taste aktiviert es):
+Jeder Spieler wählt in der Lobby sein Powerup, die dritte Taste löst es aus.
+Bots bekommen beim Hinzufügen ein zufälliges (aktiviertes) Powerup.
 
-| Powerup          | Wirkung                                             |
-|------------------|----------------------------------------------------|
-| Speed-Schub      | kurz deutlich schneller                             |
-| Dünne Linie      | eigene Linie kurz halb so breit                     |
-| Geist            | kurz durch alle Linien (zieht keine Spur)           |
-| Gegner bremsen   | alle anderen kurz langsamer                         |
-| Eckig            | nur noch 90°-Ecken – jede Tastenbetätigung = ein Knick |
-| Extra-Lücke      | erzeugt sofort eine große Lücke in der eigenen Spur |
-| Farben umkehren  | invertiert für alle den ganzen Bildschirm – verwirrt die Gegner |
+| Powerup | Wirkung |
+|---|---|
+| Speed-Schub | kurz deutlich schneller |
+| Wendig | lenkt kurzzeitig viel enger |
+| Dünne Linie | eigene Linie wird schmaler |
+| Geist | fliegt kurz durch alle Linien, zieht keine Spur |
+| Schutzschild | fängt einen Crash ab, danach kurz unverwundbar |
+| Sprung | springt sofort ein Stück nach vorne |
+| Extra-Lücke | reißt sofort eine große Lücke in die eigene Spur |
+| Eckig | nur noch 90°-Ecken, jeder Tastendruck knickt ab |
+| Gegner bremsen | alle anderen werden langsamer |
+| Gegner-Linien dick | die Linien aller anderen werden breiter |
+| Gegner verdrehen | vertauscht bei allen anderen links und rechts |
+| Farben umkehren | invertiert für alle den ganzen Bildschirm |
+| Nebel | verdunkelt das Feld, man sieht nur um sich herum |
+| Radiergummi | löscht alle bisherigen Linien auf dem Feld |
+
+## Nach der Runde
+
+Wenn eine Runde vorbei ist, bleibt das Spielfeld stehen – man sieht, wo alle
+hergefahren sind. Erst ein **Klick** (oder Leertaste) führt zum Zwischenstand.
+Der ist scrollbar (Mausrad / Pfeiltasten) und zeigt ab zehn Spielern zwei
+Spalten, damit auch große Runden komplett lesbar bleiben.
 
 ## Tests
 

@@ -1,173 +1,260 @@
-"""Einstellungsseite - jeder Gameplay-Parameter als Slider + exaktes Zahlenfeld."""
+"""Einstellungsseite: aufklappbare Bereiche, jeder Wert als Slider + Zahlenfeld.
+
+Bereiche: System - Sound - Spiel - Bots - Powerups.
+Unter "Powerups" hat jedes Powerup einen eigenen aufklappbaren Block mit
+An/Aus, Dauer, Staerke, Ladungen und Abklingzeit.
+"""
 
 from __future__ import annotations
 
-from dataclasses import asdict
+from dataclasses import fields
 
 import pygame
 
 from .. import theme as T
-from ..config import GameSettings
-from ..ui.widgets import Button, NumberField, Slider, Toggle, draw_text
+from ..config import GameSettings, default_powerups
+from ..game.powerups import POWERUPS
+from ..ui.widgets import (
+    Button,
+    NumberField,
+    ScrollPanel,
+    Slider,
+    Toggle,
+    draw_text,
+)
 from .common import BaseMenuScene
 
-# (attr, Label, lo, hi, step, decimals, suffix)
-GROUPS: list[tuple[str, list]] = [
-    ("Bewegung", [
-        ("speed", "Geschwindigkeit", 30, 400, 1, 0, " px/s"),
-        ("turn_radius", "Lenkradius", 12, 400, 1, 0, " px"),
-        ("line_width", "Linienbreite", 1.5, 20, 0.5, 1, " px"),
+# Zeilen-Typen:  ("num", attr, label, lo, hi, step, dec, suffix)
+#                ("bool", attr, label)
+#                ("sub", ueberschrift)
+SECTIONS: list[tuple[str, str, list]] = [
+    ("system", "System", [
+        ("sub", "Spielfeld"),
+        ("num", "arena_size", "Groesse (kleiner = alles groesser)", 550, 1800, 25, 0, ""),
+        ("sub", "Fenster (wirkt beim Verlassen der Seite)"),
+        ("num", "window_width", "Fensterbreite", 800, 3840, 10, 0, " px"),
+        ("num", "window_height", "Fensterhoehe", 600, 2160, 10, 0, " px"),
+        ("bool", "fullscreen", "Vollbild"),
     ]),
-    ("Luecken hinter sich", [
-        ("gap_distance", "Abstand zwischen Luecken", 40, 1200, 10, 0, " px"),
-        ("gap_distance_jitter", "Zufall auf den Abstand", 0.0, 0.9, 0.05, 2, ""),
-        ("gap_size", "Groesse einer Luecke", 6, 200, 2, 0, " px"),
+    ("sound", "Sound", [
+        ("num", "sound_volume", "Soundeffekte", 0.0, 1.0, 0.05, 2, ""),
     ]),
-    ("Powerup", [
-        ("powerup_duration", "Wirkdauer", 0.2, 10, 0.1, 1, " s"),
-        ("powerup_boost_factor", "Speed-Faktor", 1.05, 4.0, 0.05, 2, " x"),
-        ("powerup_charges", "Ladungen pro Runde", 0, 50, 1, 0, ""),
-        ("powerup_cooldown", "Abklingzeit", 0.0, 30, 0.5, 1, " s"),
+    ("spiel", "Spiel", [
+        ("sub", "Bewegung"),
+        ("num", "speed", "Geschwindigkeit", 30, 400, 1, 0, " px/s"),
+        ("num", "turn_radius", "Lenkradius", 12, 400, 1, 0, " px"),
+        ("num", "line_width", "Linienbreite", 1.5, 20, 0.5, 1, " px"),
+        ("sub", "Luecken hinter sich"),
+        ("num", "gap_distance", "Abstand zwischen Luecken", 40, 1200, 10, 0, " px"),
+        ("num", "gap_distance_jitter", "Zufall auf den Abstand", 0.0, 0.9, 0.05, 2, ""),
+        ("num", "gap_size", "Groesse einer Luecke", 6, 200, 2, 0, " px"),
+        ("sub", "Punkte & Matchende"),
+        ("num", "points_per_opponent", "Punkte je ueberlebtem Gegner", 1, 10, 1, 0, ""),
+        ("num", "target_score", "Punkte zum Sieg", 1, 500, 1, 0, ""),
+        ("sub", "Runde"),
+        ("num", "countdown_seconds", "Countdown", 0.0, 10, 0.5, 1, " s"),
+        ("num", "round_time_limit", "Zeitlimit (0 = keins)", 0.0, 600, 10, 0, " s"),
+        ("bool", "self_collision", "Eigene Linie toedlich"),
     ]),
-    ("Punkte & Matchende", [
-        ("points_per_opponent", "Punkte je ueberlebtem Gegner", 1, 10, 1, 0, ""),
-        ("target_score", "Punkte zum Sieg", 1, 500, 1, 0, ""),
+    ("bots", "Bots", [
+        ("num", "bot_count", "Anzahl beim Start", 0, 11, 1, 0, ""),
+        ("num", "bot_difficulty", "Staerke (1.0 = sehr stark)", 0.0, 1.0, 0.05, 2, ""),
     ]),
-    ("Runde", [
-        ("countdown_seconds", "Countdown", 0.0, 10, 0.5, 1, " s"),
-        ("round_time_limit", "Zeitlimit (0 = keins)", 0.0, 600, 10, 0, " s"),
-    ]),
-    ("Spielfeld", [
-        ("arena_size", "Groesse (kleiner = alles groesser)", 550, 1800, 25, 0, ""),
-    ]),
-    ("Bots", [
-        ("bot_count", "Anzahl Bots (Standard)", 0, 11, 1, 0, ""),
-        ("bot_difficulty", "Bot-Staerke", 0.0, 1.0, 0.05, 2, ""),
-    ]),
-    ("Audio", [
-        ("sound_volume", "Soundeffekte", 0.0, 1.0, 0.05, 2, ""),
-    ]),
-    ("Fenster (wirkt nach Verlassen der Seite)", [
-        ("window_width", "Fensterbreite", 800, 3840, 10, 0, " px"),
-        ("window_height", "Fensterhoehe", 600, 2160, 10, 0, " px"),
-    ]),
+    ("powerups", "Powerups", []),      # wird dynamisch gebaut
 ]
-TOGGLES = [
-    ("self_collision", "Eigene Linie toedlich", "Runde"),
-    ("fullscreen", "Vollbild", "Fenster (wirkt nach Verlassen der Seite)"),
-]
+
+ROW_H = 54
+SUB_H = 38
+HEAD_H = 52
+PU_HEAD_H = 44
 
 
 class SettingsScene(BaseMenuScene):
     title = "Einstellungen"
-    subtitle = "Alle Werte frei justierbar - so tunst du das Gameplay"
+    subtitle = "Bereich anklicken zum Auf- und Zuklappen"
 
     def __init__(self, app, back) -> None:
         super().__init__(app)
         self._back = back
         self.s: GameSettings = app.config.settings
-        self._before = asdict(self.s)
-        self._rows: list = []
+        self._win_before = (self.s.window_width, self.s.window_height, self.s.fullscreen)
+        self._open: set[str] = set()
+        self._open_pu: set[str] = set()
+        self.panel: ScrollPanel | None = None
 
     # ------------------------------------------------------------------ #
     def on_enter(self) -> None:
         self.build()
 
+    def resize(self) -> None:
+        keep = self.panel.scroll_y if self.panel else 0
+        self.build()
+        if self.panel:
+            self.panel.scroll_y = self.panel._clamp(keep)
+
+    def _toggle(self, sid: str) -> None:
+        self._open.symmetric_difference_update({sid})
+        self._rebuild_keep_scroll()
+
+    def _toggle_pu(self, pid: str) -> None:
+        self._open_pu.symmetric_difference_update({pid})
+        self._rebuild_keep_scroll()
+
+    def _rebuild_keep_scroll(self) -> None:
+        keep = self.panel.scroll_y if self.panel else 0
+        self.build()
+        if self.panel:
+            self.panel.scroll_y = self.panel._clamp(keep)
+
+    # ------------------------------------------------------------------ #
     def build(self) -> None:
-        area = self.content_rect()
-        area.height -= 8
-        from ..ui.widgets import ScrollPanel
-
-        row_h = 58
-        head_h = 46
-        total = 12
-        for name, params in GROUPS:
-            total += head_h + len(params) * row_h
-            total += sum(row_h for a, _l, _g in TOGGLES if _g == name)
-        total += 40
-
-        panel = ScrollPanel(area, total)
-        self.panel = panel
-        self._rows = []
-        y = 8
-        for gname, params in GROUPS:
-            panel.add(_Header((area.x + 4, area.y + y, area.w - 20, head_h), gname))
-            y += head_h
-            for attr, label, lo, hi, step, dec, suffix in params:
-                self._add_num_row(panel, area, y, attr, label, lo, hi, step, dec, suffix)
-                y += row_h
-            for attr, tlabel, tgroup in TOGGLES:
-                if tgroup == gname:
-                    self._add_toggle_row(panel, area, y, attr, tlabel)
-                    y += row_h
-
         w, h = self.size
+        area = pygame.Rect(max(40, (w - 940) // 2), 124, min(940, w - 80), h - 196)
+        panel = ScrollPanel(area, 10)
+        self.panel = panel
+        y = 6
+
+        for sid, label, rows in SECTIONS:
+            is_open = sid in self._open
+            panel.add(_SectionHeader((area.x, area.y + y, area.w - 18, HEAD_H),
+                                     label, is_open, lambda s=sid: self._toggle(s)))
+            y += HEAD_H
+            if not is_open:
+                y += 6
+                continue
+            if sid == "powerups":
+                y = self._build_powerups(panel, area, y)
+            else:
+                for row in rows:
+                    y = self._build_row(panel, area, y, row)
+            y += 12
+
+        panel.content_height = y + 10
+
         self.widgets = [
             panel,
-            Button((w - 360, h - 56, 150, 42), "Zuruecksetzen", self._reset, "ghost"),
-            Button((w - 196, h - 56, 150, 42), "Fertig", self._done, "primary"),
+            Button((area.x, h - 62, 190, 42), "Zuruecksetzen", self._reset, "ghost"),
+            Button((area.right - 150, h - 62, 150, 42), "Fertig", self._done, "primary"),
         ]
 
-    def _add_num_row(self, panel, area, y, attr, label, lo, hi, step, dec, suffix):
-        val = getattr(self.s, attr)
-        lbl_r = (area.x + 8, area.y + y, 300, 40)
-        sld_r = (area.x + 330, area.y + y + 18, area.w - 330 - 150, 8)
-        num_r = (area.x + area.w - 132, area.y + y + 6, 116, 34)
+    # ------------------------------------------------------------------ #
+    def _build_row(self, panel, area, y, row) -> int:
+        kind = row[0]
+        if kind == "sub":
+            panel.add(_SubHead((area.x + 22, area.y + y, area.w - 60, SUB_H), row[1]))
+            return y + SUB_H
+        if kind == "bool":
+            _, attr, label = row
+            self._add_bool(panel, area, y, self.s, attr, label, indent=34)
+            return y + ROW_H
+        _, attr, label, lo, hi, step, dec, suffix = row
+        self._add_num(panel, area, y, self.s, attr, label, lo, hi, step, dec, suffix, indent=34)
+        return y + ROW_H
 
-        slider = Slider(sld_r, lo, hi, val, None, step=step)
-        num = NumberField(num_r, lo, hi, val, None, step=step, decimals=dec, suffix=suffix)
+    def _build_powerups(self, panel, area, y) -> int:
+        panel.add(Button((area.x + 34, area.y + y, 120, 34), "Alle an",
+                         lambda: self._all_powerups(True), "ghost"))
+        panel.add(Button((area.x + 166, area.y + y, 120, 34), "Alle aus",
+                         lambda: self._all_powerups(False), "ghost"))
+        y += 48
 
-        def on_slider(v, a=attr, n=num):
-            setattr(self.s, a, v)
+        for meta in POWERUPS:
+            pid = meta["id"]
+            cfg = self.s.powerup_cfg(pid)
+            is_open = pid in self._open_pu
+            panel.add(_PowerupHeader(
+                (area.x + 22, area.y + y, area.w - 60, PU_HEAD_H),
+                meta, cfg, is_open, lambda p=pid: self._toggle_pu(p)))
+            tg = Toggle((area.x + area.w - 96, area.y + y + 8), cfg.enabled, None)
+            tg.on_change = lambda v, cc=cfg: setattr(cc, "enabled", v)
+            panel.add(tg)
+            y += PU_HEAD_H
+            if not is_open:
+                y += 4
+                continue
+
+            panel.add(_Desc((area.x + 56, area.y + y, area.w - 110, 30), meta["desc"]))
+            y += 30
+            if meta["duration"] is not None:
+                self._add_num(panel, area, y, cfg, "duration", "Wirkdauer",
+                              0.1, 30, 0.1, 1, " s", indent=56)
+                y += ROW_H
+            if meta["strength"] is not None:
+                lo, hi, step, dec = meta["strength_range"]
+                self._add_num(panel, area, y, cfg, "strength", meta["strength_label"],
+                              lo, hi, step, dec, meta.get("strength_suffix", ""), indent=56)
+                y += ROW_H
+            self._add_num(panel, area, y, cfg, "charges", "Ladungen pro Runde",
+                          0, 99, 1, 0, "", indent=56)
+            y += ROW_H
+            self._add_num(panel, area, y, cfg, "cooldown", "Abklingzeit",
+                          0.0, 60, 0.5, 1, " s", indent=56)
+            y += ROW_H + 10
+        return y
+
+    # ------------------------------------------------------------------ #
+    def _add_num(self, panel, area, y, obj, attr, label, lo, hi, step, dec, suffix, *, indent) -> None:
+        val = float(getattr(obj, attr))
+        num_w, sld_gap = 118, 24
+        lbl_w = 300
+        sld_x = area.x + indent + lbl_w
+        sld_w = max(80, area.w - indent - lbl_w - num_w - sld_gap - 30)
+
+        slider = Slider((sld_x, area.y + y + 17, sld_w, 8), lo, hi, val, None, step=step)
+        num = NumberField((area.x + area.w - num_w - 30, area.y + y + 5, num_w, 34),
+                          lo, hi, val, None, step=step, decimals=dec, suffix=suffix)
+
+        def on_slider(v, o=obj, a=attr, n=num):
+            setattr(o, a, int(v) if dec == 0 else v)
             n.set_value(v)
             self._live(a)
 
-        def on_num(v, a=attr, sl=slider):
-            setattr(self.s, a, v)
+        def on_num(v, o=obj, a=attr, sl=slider):
+            setattr(o, a, int(v) if dec == 0 else v)
             sl.value = v
             self._live(a)
 
         slider.on_change = on_slider
         num.on_change = on_num
-        panel.add(_RowLabel(lbl_r, label))
+        panel.add(_RowLabel((area.x + indent, area.y + y, lbl_w, ROW_H - 6), label))
         panel.add(slider)
         panel.add(num)
 
-    def _add_toggle_row(self, panel, area, y, attr, label):
-        lbl_r = (area.x + 8, area.y + y, 400, 40)
-        tg = Toggle((area.x + area.w - 80, area.y + y + 4), getattr(self.s, attr), None)
-
-        def on_tg(v, a=attr):
-            setattr(self.s, a, v)
-
-        tg.on_change = on_tg
-        panel.add(_RowLabel(lbl_r, label))
+    def _add_bool(self, panel, area, y, obj, attr, label, *, indent) -> None:
+        tg = Toggle((area.x + area.w - 96, area.y + y + 10), getattr(obj, attr), None)
+        tg.on_change = lambda v, o=obj, a=attr: setattr(o, a, v)
+        panel.add(_RowLabel((area.x + indent, area.y + y, 460, ROW_H - 6), label))
         panel.add(tg)
 
     # ------------------------------------------------------------------ #
+    def _all_powerups(self, on: bool) -> None:
+        for meta in POWERUPS:
+            self.s.powerup_cfg(meta["id"]).enabled = on
+        if not on:                      # mindestens eines muss bleiben
+            self.s.powerup_cfg(POWERUPS[0]["id"]).enabled = True
+        self._rebuild_keep_scroll()
+
     def _live(self, attr: str) -> None:
-        if attr in ("sound_volume", "music_volume"):
+        if attr == "sound_volume":
             self.app.audio.refresh_volume()
 
     def _reset(self) -> None:
         defaults = GameSettings()
-        for f in asdict(defaults):
-            setattr(self.s, f, getattr(defaults, f))
-        self.build()
+        for f in fields(GameSettings):
+            if f.name == "powerups":
+                continue
+            setattr(self.s, f.name, getattr(defaults, f.name))
+        self.s.powerups = default_powerups()
+        self._rebuild_keep_scroll()
 
     def _done(self) -> None:
-        for f, v in asdict(self.s.clamped()).items():
-            setattr(self.s, f, v)
+        clean = self.s.clamped()
+        for f in fields(GameSettings):
+            setattr(self.s, f.name, getattr(clean, f.name))
         self.app.config.settings = self.s
         self.app.save_config()
-        after = asdict(self.s)
-        need_win = (
-            after["window_width"] != self._before["window_width"]
-            or after["window_height"] != self._before["window_height"]
-            or after["fullscreen"] != self._before["fullscreen"]
-        )
         self.app.audio.play("click")
-        if need_win:
+        if (self.s.window_width, self.s.window_height, self.s.fullscreen) != self._win_before:
             self.app.rebuild_window()
         self.app.set_scene(self._back())
 
@@ -179,14 +266,83 @@ class SettingsScene(BaseMenuScene):
     def draw(self, surf) -> None:
         surf.fill(T.BG)
         w, h = self.size
-        draw_text(surf, self.app.fonts.display(34), self.title, T.TEXT, (48, 44))
-        draw_text(surf, self.app.fonts.body(17), self.subtitle, T.TEXT_MUTED, (50, 86))
-        pygame.draw.line(surf, T.BORDER, (48, 112), (w - 48, 112), 1)
+        draw_text(surf, self.app.fonts.display(34), self.title, T.TEXT, (48, 40))
+        draw_text(surf, self.app.fonts.body(16), self.subtitle, T.TEXT_MUTED, (50, 84))
+        pygame.draw.line(surf, T.BORDER, (48, 114), (w - 48, 114), 1)
         for x in self.widgets:
             x.draw(surf, self.app.fonts)
 
 
-class _Header:
+# =========================================================================== #
+def _arrow(surf, center, size, down: bool, color) -> None:
+    """Kleines Dreieck - selbst gezeichnet, damit es in jedem Font da ist."""
+    cx, cy = center
+    if down:
+        pts = [(cx - size, cy - size // 2), (cx + size, cy - size // 2), (cx, cy + size)]
+    else:
+        pts = [(cx - size // 2, cy - size), (cx - size // 2, cy + size), (cx + size, cy)]
+    pygame.draw.polygon(surf, color, pts)
+
+
+class _SectionHeader:
+    def __init__(self, rect, text, is_open, on_click):
+        self.rect = pygame.Rect(rect)
+        self.text = text
+        self.is_open = is_open
+        self.on_click = on_click
+        self._hover = False
+
+    def handle_event(self, e):
+        if e.type == pygame.MOUSEMOTION:
+            self._hover = self.rect.collidepoint(e.pos)
+        elif e.type == pygame.MOUSEBUTTONDOWN and e.button == 1 and self.rect.collidepoint(e.pos):
+            self.on_click()
+            return True
+        return False
+
+    def update(self, dt):
+        pass
+
+    def draw(self, surf, fonts):
+        bg = T.ACCENT_SOFT if (self.is_open or self._hover) else T.SURFACE
+        pygame.draw.rect(surf, bg, self.rect, border_radius=T.R_SM)
+        _arrow(surf, (self.rect.x + 24, self.rect.centery), 6, self.is_open, T.ACCENT)
+        draw_text(surf, fonts.display(21), self.text, T.ACCENT,
+                  (self.rect.x + 40, self.rect.centery - 14))
+
+
+class _PowerupHeader:
+    def __init__(self, rect, meta, cfg, is_open, on_click):
+        self.rect = pygame.Rect(rect)
+        self.meta = meta
+        self.cfg = cfg
+        self.is_open = is_open
+        self.on_click = on_click
+
+    def handle_event(self, e):
+        if e.type == pygame.MOUSEBUTTONDOWN and e.button == 1:
+            hit = pygame.Rect(self.rect.x, self.rect.y, self.rect.w - 110, self.rect.h)
+            if hit.collidepoint(e.pos):
+                self.on_click()
+                return True
+        return False
+
+    def update(self, dt):
+        pass
+
+    def draw(self, surf, fonts):
+        pygame.draw.rect(surf, T.SURFACE if self.is_open else T.BG, self.rect, border_radius=T.R_SM)
+        pygame.draw.rect(surf, T.BORDER, self.rect, width=1, border_radius=T.R_SM)
+        col = T.TEXT if self.cfg.enabled else T.TEXT_MUTED
+        _arrow(surf, (self.rect.x + 22, self.rect.centery), 5, self.is_open, T.TEXT_MUTED)
+        draw_text(surf, fonts.body_bold(17), self.meta["label"], col,
+                  (self.rect.x + 36, self.rect.centery - 10))
+        if not self.cfg.enabled:
+            draw_text(surf, fonts.body(13), "aus", T.TEXT_MUTED,
+                      (self.rect.right - 118, self.rect.centery - 8), right=True)
+
+
+class _SubHead:
     def __init__(self, rect, text):
         self.rect = pygame.Rect(rect)
         self.text = text
@@ -198,7 +354,8 @@ class _Header:
         pass
 
     def draw(self, surf, fonts):
-        draw_text(surf, fonts.display(19), self.text, T.ACCENT, (self.rect.x, self.rect.bottom - 26))
+        draw_text(surf, fonts.body_bold(15), self.text, T.TEXT_MUTED,
+                  (self.rect.x, self.rect.bottom - 24))
         pygame.draw.line(surf, T.BORDER, (self.rect.x, self.rect.bottom - 4),
                          (self.rect.right, self.rect.bottom - 4), 1)
 
@@ -216,3 +373,18 @@ class _RowLabel:
 
     def draw(self, surf, fonts):
         draw_text(surf, fonts.body(17), self.text, T.TEXT, (self.rect.x, self.rect.centery - 9))
+
+
+class _Desc:
+    def __init__(self, rect, text):
+        self.rect = pygame.Rect(rect)
+        self.text = text
+
+    def handle_event(self, e):
+        return False
+
+    def update(self, dt):
+        pass
+
+    def draw(self, surf, fonts):
+        draw_text(surf, fonts.body(14), self.text, T.TEXT_MUTED, (self.rect.x, self.rect.y + 4))

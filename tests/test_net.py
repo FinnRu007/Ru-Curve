@@ -8,6 +8,10 @@ import time
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
+# Tests niemals auf die echte config.json des Nutzers loslassen
+os.environ["RUCURVE_CONFIG"] = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "_tmp", "config.json")
+
 from rucurve.net.client import GameClient
 from rucurve.net.host import GameHost
 

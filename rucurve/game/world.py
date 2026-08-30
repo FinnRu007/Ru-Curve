@@ -86,7 +86,7 @@ class World:
                 spot = (x, y, heading)
             placed.append(spot)
             c.x, c.y, c.heading = spot
-            c.reset_runtime(self.s.powerup_charges)
+            c.reset_runtime(self.s)
             c.next_gap_at = self._roll_gap() + self.s.gap_distance * 0.4
 
     # ================================================================== #
@@ -133,25 +133,26 @@ class World:
 
     def _advance(self, c: Curve) -> None:
         s = self.s
-        speed_mult, width_mult, ghost = c.effect_mods()
+        m = c.mods()
 
         if c.powerup_pressed and not c._pu_edge:
             powerups.activate(self, c)
+            m = c.mods()
         c._pu_edge = c.powerup_pressed
 
-        speed = s.speed * speed_mult
-        turn_rate = s.turn_rate()          # aus der Grundgeschwindigkeit -> Radius bleibt stabil
-        radius = s.line_width * 0.5 * width_mult
+        turn = -c.turn if m.reverse else c.turn
+        speed = s.speed * m.speed
+        turn_rate = s.turn_rate() * m.turn   # Radius bleibt an die Grundgeschwindigkeit gekoppelt
+        radius = s.line_width * 0.5 * m.width
 
-        square = any(e[0] == "square" for e in c.effects)
-        if square:
+        if m.square:
             # Eckig: jede neue Tasten-Betaetigung dreht um exakt 90 Grad
             c._sq_lock = max(0.0, c._sq_lock - TICK)
-            if c.turn != 0 and c._sq_prev_turn == 0 and c._sq_lock <= 0.0:
+            if turn != 0 and c._sq_prev_turn == 0 and c._sq_lock <= 0.0:
                 q = math.pi / 2
-                c.heading = round((c.heading + c.turn * q) / q) * q
+                c.heading = round((c.heading + turn * q) / q) * q
                 c._sq_lock = 0.12
-            c._sq_prev_turn = c.turn
+            c._sq_prev_turn = turn
             dh = 0.0
         else:
             c._sq_prev_turn = 0
@@ -159,16 +160,19 @@ class World:
         dist = speed * TICK
         steps = max(1, math.ceil(dist / max(0.75, s.line_width * 0.5)))
         ds = dist / steps
-        if not square:
-            dh = c.turn * turn_rate * TICK / steps
+        if not m.square:
+            dh = turn * turn_rate * TICK / steps
 
         for _ in range(steps):
             c.heading += dh
             nx = c.x + math.cos(c.heading) * ds
             ny = c.y + math.sin(c.heading) * ds
 
-            if not ghost and self.grid.hits(nx, ny, max(1.0, radius * 0.9)):
+            if not m.ghost and self.grid.hits(nx, ny, max(1.0, radius * 0.9)):
                 c.x, c.y = nx, ny
+                if m.shield:
+                    self._break_shield(c)
+                    return
                 self._kill(c)
                 return
 
@@ -182,7 +186,7 @@ class World:
                     c.gap_left = s.gap_size
                     c.dist_since_gap = 0.0
                     c.next_gap_at = self._roll_gap()
-            if ghost:
+            if m.ghost:
                 drawing = False
 
             if drawing:
@@ -198,11 +202,16 @@ class World:
         for i in range(len(alive)):
             for j in range(i + 1, len(alive)):
                 a, b = alive[i], alive[j]
-                if a.effect_mods()[2] or b.effect_mods()[2]:
+                ma, mb = a.mods(), b.mods()
+                if ma.ghost or mb.ghost:
                     continue
-                if (a.x - b.x) ** 2 + (a.y - b.y) ** 2 <= thr * thr:
-                    self._kill(a)
-                    self._kill(b)
+                if (a.x - b.x) ** 2 + (a.y - b.y) ** 2 > thr * thr:
+                    continue
+                for c, mc in ((a, ma), (b, mb)):
+                    if mc.shield:
+                        self._break_shield(c)
+                    else:
+                        self._kill(c)
 
     def _commit_pending(self, c: Curve, force: bool = False) -> None:
         while c.pending:
@@ -212,6 +221,25 @@ class World:
                 c.pending.popleft()
             else:
                 break
+
+    def _break_shield(self, c: Curve) -> None:
+        """Schild faengt den Treffer ab und macht kurz unverwundbar."""
+        grace = 1.0
+        for e in c.effects:
+            if e[0] == "shield":
+                grace = max(0.2, float(e[2]))
+                break
+        c.drop_effect("shield")
+        c.effects.append(["ghost", grace, 1.0])
+        c.pending.clear()
+        self.events.append(("shield", c.id, round(c.x, 1), round(c.y, 1)))
+
+    def clear_trails(self) -> None:
+        """Radiergummi-Powerup: alle Spuren verschwinden."""
+        self.grid.clear()
+        for c in self.curves:
+            c.pending.clear()
+        self.events.append(("clear",))
 
     def _kill(self, c: Curve) -> None:
         if not c.alive:
@@ -280,12 +308,17 @@ class World:
     def screen_inverted(self) -> bool:
         return any(e[0] == "invert" for c in self.curves for e in c.effects)
 
+    def fog_radius(self) -> float:
+        """0 = kein Nebel, sonst die Sichtweite in Spiel-Einheiten."""
+        return max((e[2] for c in self.curves for e in c.effects if e[0] == "fog"), default=0.0)
+
     def snapshot(self) -> dict:
         return {
             "phase": self.phase,
             "countdown": round(self.countdown, 2),
             "time": round(self.time, 2),
             "inv": self.screen_inverted(),
+            "fog": round(self.fog_radius(), 1),
             "curves": [
                 {
                     "id": c.id,
@@ -296,9 +329,10 @@ class World:
                     "pu": c.pu.charges,
                     "cd": round(c.pu.cooldown_left, 1),
                     "score": c.score,
-                    "boost": any(e[0] == "speed" for e in c.effects),
-                    "square": any(e[0] == "square" for e in c.effects),
-                    "ghost": c.effect_mods()[2],
+                    "boost": c.mods().speed > 1.01,
+                    "square": c.mods().square,
+                    "ghost": c.mods().ghost,
+                    "shield": c.mods().shield,
                 }
                 for c in self.curves
             ],

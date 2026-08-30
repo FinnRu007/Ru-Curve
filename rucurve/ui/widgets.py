@@ -290,6 +290,7 @@ class Dropdown(Widget):
         self.value = value
         self.on_change = on_change
         self.open = False
+        self._scroll = 0
 
     def _label(self) -> str:
         for v, lbl in self.options:
@@ -297,19 +298,47 @@ class Dropdown(Widget):
                 return lbl
         return "?"
 
+    # -- Liste kann laenger sein als der Platz: klappt notfalls nach oben auf
+    #    und laesst sich mit dem Mausrad scrollen.
+    def _layout(self, screen_h: int | None = None) -> tuple[int, int, int]:
+        """(erste sichtbare Zeile, Anzahl sichtbar, y der ersten Zeile)."""
+        h = self.rect.h
+        sh = screen_h or pygame.display.get_surface().get_height()
+        below = max(0, sh - self.rect.bottom - 8)
+        above = max(0, self.rect.y - 8)
+        n = len(self.options)
+        if below >= n * h or below >= above:
+            vis = max(1, min(n, below // h))
+            top = self.rect.bottom
+        else:
+            vis = max(1, min(n, above // h))
+            top = self.rect.y - vis * h
+        self._scroll = max(0, min(self._scroll, n - vis))
+        return self._scroll, vis, top
+
     def handle_event(self, e) -> bool:
         if not (self.visible and self.enabled):
             return False
+        if self.open and e.type == pygame.MOUSEWHEEL:
+            self._scroll = max(0, self._scroll - e.y)
+            return True
         if e.type == pygame.MOUSEBUTTONDOWN and e.button == 1:
             if self.rect.collidepoint(e.pos):
                 self.open = not self.open
+                if self.open:      # gewaehlten Eintrag mit anzeigen
+                    idx = next((i for i, (v, _l) in enumerate(self.options) if v == self.value), 0)
+                    self._scroll = idx
                 return True
             if self.open:
-                for i, (v, _lbl) in enumerate(self.options):
-                    r = pygame.Rect(self.rect.x, self.rect.bottom + i * self.rect.h, self.rect.w, self.rect.h)
+                start, vis, top = self._layout()
+                for row in range(vis):
+                    i = start + row
+                    if i >= len(self.options):
+                        break
+                    r = pygame.Rect(self.rect.x, top + row * self.rect.h, self.rect.w, self.rect.h)
                     if r.collidepoint(e.pos):
-                        self.value = v
-                        self.on_change(v)
+                        self.value = self.options[i][0]
+                        self.on_change(self.value)
                         self.open = False
                         return True
                 self.open = False
@@ -326,11 +355,23 @@ class Dropdown(Widget):
     def draw_overlay(self, surf, fonts) -> None:
         if not self.open:
             return
-        for i, (_v, lbl) in enumerate(self.options):
-            r = pygame.Rect(self.rect.x, self.rect.bottom + i * self.rect.h, self.rect.w, self.rect.h)
-            pygame.draw.rect(surf, T.BG, r)
+        start, vis, top = self._layout(surf.get_height())
+        n = len(self.options)
+        for row in range(vis):
+            i = start + row
+            if i >= n:
+                break
+            v, lbl = self.options[i]
+            r = pygame.Rect(self.rect.x, top + row * self.rect.h, self.rect.w, self.rect.h)
+            pygame.draw.rect(surf, T.ACCENT_SOFT if v == self.value else T.BG, r)
             pygame.draw.rect(surf, T.BORDER, r, width=1)
             draw_text(surf, fonts.body(16), lbl, T.TEXT, (r.x + 10, r.centery - 9))
+        if vis < n:      # Scroll-Hinweis
+            bar = pygame.Rect(self.rect.right - 5, top, 3, vis * self.rect.h)
+            pygame.draw.rect(surf, T.SURFACE_ALT, bar)
+            bh = max(16, int(bar.h * vis / n))
+            by = bar.y + int((bar.h - bh) * (start / max(1, n - vis)))
+            pygame.draw.rect(surf, T.BORDER, (bar.x, by, 3, bh))
 
 
 # --------------------------------------------------------------------------- #

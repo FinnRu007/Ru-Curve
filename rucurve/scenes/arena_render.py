@@ -38,6 +38,21 @@ def _ring(surf, color, x, y, r, w):
 
 
 _glow_cache: dict[int, pygame.Surface] = {}
+_hole_cache: dict[int, pygame.Surface] = {}
+
+
+def _hole_mask(r: int) -> pygame.Surface:
+    """Weicher Alpha-Kreis - wird per BLEND_RGBA_SUB aus dem Nebel gestanzt."""
+    m = _hole_cache.get(r)
+    if m is None:
+        m = pygame.Surface((r * 2, r * 2), pygame.SRCALPHA)
+        steps = 26
+        for i in range(steps, 0, -1):
+            rad = int(r * i / steps)
+            a = int(255 * (1 - (i / steps) ** 2.2))
+            pygame.draw.circle(m, (0, 0, 0, a), (r, r), rad)
+        _hole_cache[r] = m
+    return m
 
 
 def _glow_mask(r: int) -> pygame.Surface:
@@ -65,6 +80,9 @@ class ArenaView:
         self.ox = (sw - self.view_w) // 2
         self.oy = _TOP + _PAD + (avail_h - self.view_h) // 2
         self.surf = pygame.Surface((self.view_w, self.view_h)).convert()
+        # wiederverwendete Flaechen fuer Nebel / Farbumkehr (nicht je Frame neu)
+        self._fog_surf = pygame.Surface((self.view_w, self.view_h), pygame.SRCALPHA)
+        self._invert_surf: pygame.Surface | None = None
         self._flashes: list[dict] = []
         self.reset()
 
@@ -104,7 +122,7 @@ class ArenaView:
     # ------------------------------------------------------------------ #
     def draw(self, target, render_curves: list[dict], fonts, *, countdown=0.0,
              round_no=1, phase="running", banner: str | None = None,
-             inverted: bool = False) -> None:
+             inverted: bool = False, fog: float = 0.0, hint: str | None = None) -> None:
         target.fill(T.BG)
 
         shadow = pygame.Rect(self.ox - 6, self.oy - 4, self.view_w + 12, self.view_h + 16)
@@ -130,6 +148,8 @@ class ArenaView:
                         special_flags=pygame.BLEND_RGBA_ADD)
             if rc.get("boost"):
                 _ring(target, (255, 255, 255), x, y, rad + 5, 2)
+            if rc.get("shield"):
+                _ring(target, (235, 245, 255), x, y, rad + 8, 2)
             if rc.get("ghost"):
                 _ring(target, col, x, y, rad, 2)
             elif rc.get("square"):
@@ -144,17 +164,23 @@ class ArenaView:
             pygame.draw.aaline(target, (255, 255, 255),
                                (x, y), (x + math.cos(h) * (rad + 7), y + math.sin(h) * (rad + 7)))
 
+        if fog > 0:
+            self._draw_fog(target, render_curves, fog)
+
         self._draw_hud(target, render_curves, fonts, round_no)
 
         if phase == "countdown":
             self._countdown(target, fonts, countdown)
         if banner:
             self._banner(target, fonts, banner)
+        if hint:
+            self._hint(target, fonts, hint)
 
         if inverted:
-            veil = pygame.Surface(target.get_size())
-            veil.fill((255, 255, 255))
-            target.blit(veil, (0, 0), special_flags=pygame.BLEND_RGB_SUB)
+            if self._invert_surf is None or self._invert_surf.get_size() != target.get_size():
+                self._invert_surf = pygame.Surface(target.get_size())
+                self._invert_surf.fill((255, 255, 255))
+            target.blit(self._invert_surf, (0, 0), special_flags=pygame.BLEND_RGB_SUB)
 
     # ------------------------------------------------------------------ #
     def _draw_flashes(self, target) -> None:
@@ -174,6 +200,30 @@ class ArenaView:
             pygame.draw.circle(ring, (*f["color"], a), ring.get_rect().center, int(rad), 3)
             target.blit(ring, (x - ring.get_width() / 2, y - ring.get_height() / 2))
         self._flashes = alive
+
+    def _draw_fog(self, target, render_curves, radius_units: float) -> None:
+        """Nebel: Feld verdunkeln, um jeden lebenden Kopf bleibt ein Sichtfenster."""
+        r = max(24, int(radius_units * self.scale))
+        fog = self._fog_surf
+        fog.fill((6, 7, 12, 235))
+        hole = _hole_mask(r)
+        for rc in render_curves:
+            if not rc.get("alive", True):
+                continue
+            hx = int(rc["x"] * self.scale) - r
+            hy = int(rc["y"] * self.scale) - r
+            fog.blit(hole, (hx, hy), special_flags=pygame.BLEND_RGBA_SUB)
+        target.blit(fog, (self.ox, self.oy))
+
+    def _hint(self, target, fonts, text) -> None:
+        cx = self.ox + self.view_w // 2
+        y = self.oy + self.view_h - 46
+        img = fonts.body_bold(17).render(text, True, (255, 255, 255))
+        bg = img.get_rect(center=(cx, y)).inflate(40, 22)
+        s = pygame.Surface(bg.size, pygame.SRCALPHA)
+        pygame.draw.rect(s, (42, 76, 224, 235), s.get_rect(), border_radius=999)
+        target.blit(s, bg)
+        target.blit(img, img.get_rect(center=(cx, y)))
 
     def _countdown(self, target, fonts, countdown) -> None:
         n = max(1, math.ceil(countdown))

@@ -11,6 +11,10 @@ os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
 os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
+# Tests niemals auf die echte config.json des Nutzers loslassen
+os.environ["RUCURVE_CONFIG"] = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "_tmp", "config.json")
+
 import pygame  # noqa
 
 from rucurve.app import App

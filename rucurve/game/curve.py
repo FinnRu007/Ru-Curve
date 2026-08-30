@@ -3,8 +3,22 @@
 from __future__ import annotations
 
 from collections import deque
+from typing import NamedTuple
 
 from .powerups import DEFAULT_POWERUP, PowerupState
+
+
+class Mods(NamedTuple):
+    """Aktuell wirksame Modifikatoren aus allen laufenden Effekten."""
+
+    speed: float = 1.0
+    width: float = 1.0
+    ghost: bool = False
+    turn: float = 1.0
+    reverse: bool = False
+    shield: bool = False
+    fog: float = 0.0
+    square: bool = False
 
 
 class Curve:
@@ -45,6 +59,7 @@ class Curve:
         self._pu_edge = False
         self._sq_prev_turn = 0            # fuer das "Eckig"-Powerup
         self._sq_lock = 0.0
+        self._bot_turn = 0                # letzte Bot-Entscheidung (Traegheit)
 
         self.dist_since_gap = 0.0
         self.next_gap_at = 1e9
@@ -55,7 +70,7 @@ class Curve:
         self.pu = PowerupState(powerup_kind, 0)
 
     # ------------------------------------------------------------------ #
-    def reset_runtime(self, powerup_charges: int) -> None:
+    def reset_runtime(self, settings) -> None:
         self.alive = True
         self.place = 0
         self.turn = 0
@@ -63,26 +78,45 @@ class Curve:
         self._pu_edge = False
         self._sq_prev_turn = 0
         self._sq_lock = 0.0
+        self._bot_turn = 0
         self.dist_since_gap = 0.0
         self.gap_left = 0.0
         self.dist_travelled = 0.0
         self.pending.clear()
         self.effects.clear()
-        self.pu = PowerupState(self.powerup_kind, powerup_charges)
+        cfg = settings.powerup_cfg(self.powerup_kind)
+        charges = cfg.charges if cfg.enabled else 0
+        self.pu = PowerupState(self.powerup_kind, charges, cfg.cooldown)
 
     # ------------------------------------------------------------------ #
-    def effect_mods(self) -> tuple[float, float, bool]:
-        """(speed_mult, width_mult, ghost) aus den aktiven Effekten."""
-        sm = wm = 1.0
-        ghost = False
+    def mods(self) -> Mods:
+        sm = wm = tm = 1.0
+        ghost = reverse = shield = square = False
+        fog = 0.0
         for kind, _t, mag in self.effects:
-            if kind in ("speed", "slow"):
+            if kind == "speed":
                 sm *= mag
-            elif kind == "thin":
+            elif kind == "width":
                 wm *= mag
+            elif kind == "agile":
+                tm *= mag
             elif kind == "ghost":
                 ghost = True
-        return sm, wm, ghost
+            elif kind == "reverse":
+                reverse = True
+            elif kind == "shield":
+                shield = True
+            elif kind == "square":
+                square = True
+            elif kind == "fog":
+                fog = max(fog, mag)
+        return Mods(sm, wm, ghost, tm, reverse, shield, fog, square)
+
+    def has_effect(self, kind: str) -> bool:
+        return any(e[0] == kind for e in self.effects)
+
+    def drop_effect(self, kind: str) -> None:
+        self.effects = [e for e in self.effects if e[0] != kind]
 
     def tick_effects(self, dt: float) -> None:
         for e in self.effects:

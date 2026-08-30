@@ -26,10 +26,12 @@ class GameScene:
         self._acc = 0.0
         self._snap_acc = 0.0
         self.paused = False
-        self._end_timer = 0.0
+        self._end_delay = 0.0          # kurze Sperre, damit kein Klick verschluckt wird
+        self._await_click = False      # Runde vorbei -> auf Klick/Taste warten
         self._banner: str | None = None
         self._pause_widgets: list = []
         self._last_input: dict[int, tuple] = {}
+        self._bot_frame = 0
 
         # lokale Slots -> Curve
         self.local_curves = [c for c in self.world.curves if c.is_local]
@@ -73,9 +75,19 @@ class GameScene:
                 self.paused = not self.paused
                 if self.paused:
                     self._build_pause()
+                continue
             if self.paused:
                 for w in self._pause_widgets:
                     w.handle_event(e)
+                continue
+            # Runde vorbei: das Spielfeld bleibt stehen, bis jemand weiterklickt
+            if self._await_click and (
+                (e.type == pygame.MOUSEBUTTONDOWN and e.button == 1)
+                or (e.type == pygame.KEYDOWN and e.key in (
+                    pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_SPACE))
+            ):
+                self._go_scoreboard()
+                return
 
     def _build_pause(self) -> None:
         w, h = self.app.screen.get_size()
@@ -113,10 +125,10 @@ class GameScene:
                 self._after_step()
             if self.world.phase == "finished":
                 self._on_round_finished()
-        elif self.world.phase == "finished":
-            self._end_timer -= dt
-            if self._end_timer <= 0:
-                self._go_scoreboard()
+        elif self.world.phase == "finished" and not self._await_click:
+            self._end_delay -= dt
+            if self._end_delay <= 0:
+                self._await_click = True
 
     def _after_step(self) -> None:
         seg = self.world.drain_segments()
@@ -129,6 +141,12 @@ class GameScene:
                 if len(ev) >= 4:
                     c = self.world._by_id(ev[1])
                     self.view.add_flash(ev[2], ev[3], c.color if c else (255, 255, 255))
+            elif kind == "shield":
+                self.app.audio.play("powerup")
+                if len(ev) >= 4:
+                    self.view.add_flash(ev[2], ev[3], (255, 255, 255))
+            elif kind == "clear":
+                self.view.reset()
             elif kind == "pu_use":
                 self.app.audio.play("powerup")
             elif kind == "go":
@@ -149,12 +167,22 @@ class GameScene:
             self.world.set_input(c.id, keys[s.left], keys[s.right], keys[s.powerup])
 
     def _read_bot_input(self) -> None:
+        """Bot-Entscheidungen gestaffelt: jeder Bot denkt nur jeden n-ten Frame.
+
+        20 Entscheidungen pro Sekunde reichen voellig (Menschen reagieren
+        langsamer) und die Frames bleiben gleichmaessig belastet."""
         if self.world.phase != "running":
             return
-        for c in self.bot_curves:
-            if not c.alive:
-                continue
-            left, right, pu = bots.control_bot(self.world, c, self.settings.bot_difficulty)
+        alive = [c for c in self.bot_curves if c.alive]
+        if not alive:
+            return
+        stride = 3 if len(alive) > 3 else 2
+        self._bot_frame += 1
+        diff = self.settings.bot_difficulty
+        for i, c in enumerate(alive):
+            if (self._bot_frame + i) % stride:
+                continue                       # behaelt die letzte Eingabe bei
+            left, right, pu = bots.control_bot(self.world, c, diff)
             self.world.set_input(c.id, left, right, pu)
 
     # ------------------------------------------------------------------ #
@@ -190,7 +218,7 @@ class GameScene:
 
     # ------------------------------------------------------------------ #
     def _on_round_finished(self) -> None:
-        self._end_timer = 2.6
+        self._end_delay = 0.6
         winner = self.world.round_standings[0]["name"] if self.world.round_standings else "-"
         self._banner = f"{winner} gewinnt die Runde!"
         if self.session.host:
@@ -215,10 +243,11 @@ class GameScene:
                 "id": c.id, "x": c.x, "y": c.y, "h": c.heading,
                 "alive": c.alive, "color": c.color, "name": c.name,
                 "score": c.score, "pu": c.pu.charges, "cd": c.pu.cooldown_left,
-                "boost": any(e[0] == "speed" for e in c.effects),
-                "square": any(e[0] == "square" for e in c.effects),
-                "ghost": c.effect_mods()[2],
-                "width": self.world.s.line_width,
+                "boost": c.mods().speed > 1.01,
+                "square": c.mods().square,
+                "ghost": c.mods().ghost,
+                "shield": c.mods().shield,
+                "width": self.world.s.line_width * c.mods().width,
             })
         self.view.draw(
             surf, rcs, self.app.fonts,
@@ -227,6 +256,8 @@ class GameScene:
             phase=self.world.phase,
             banner=self._banner if self.world.phase == "finished" else None,
             inverted=self.world.screen_inverted() and self.world.phase == "running",
+            fog=self.world.fog_radius() if self.world.phase == "running" else 0.0,
+            hint="Klicken oder Leertaste fuer den Zwischenstand" if self._await_click else None,
         )
         if self.paused:
             self._draw_pause(surf)

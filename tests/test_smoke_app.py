@@ -10,6 +10,10 @@ os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
 os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
+# Tests niemals auf die echte config.json des Nutzers loslassen
+os.environ["RUCURVE_CONFIG"] = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "_tmp", "config.json")
+
 import pygame  # noqa: E402
 
 from rucurve.app import App  # noqa: E402
@@ -42,11 +46,19 @@ def run():
     game = app._pending_scene
     app._swap_scene()
 
+    click = pygame.event.Event(pygame.MOUSEBUTTONDOWN, {"button": 1, "pos": (10, 10)})
+
     rounds_seen = 0
-    for i in range(60 * 90):  # bis zu 90 Sekunden Spiel-Zeit simulieren
+    clicks = 0
+    for i in range(60 * 180):  # bis zu 3 Minuten Spiel-Zeit simulieren
         game.update(1 / 60)
         if i % 20 == 0:
             game.draw(surf)
+        # Runde vorbei -> das Feld bleibt stehen, bis geklickt wird
+        if getattr(game, "_await_click", False):
+            game.draw(surf)
+            game.handle_events([click])
+            clicks += 1
         nxt = app._pending_scene
         if isinstance(nxt, ScoreboardScene):
             app._swap_scene()
@@ -60,7 +72,8 @@ def run():
     else:
         raise AssertionError("Match wurde nie entschieden")
 
-    print(f"ok   Match nach {rounds_seen} Runde(n) entschieden")
+    assert clicks >= rounds_seen, "Runde muss auf einen Klick warten"
+    print(f"ok   Match nach {rounds_seen} Runde(n) entschieden ({clicks} Weiter-Klicks)")
     pygame.quit()
 
 

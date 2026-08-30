@@ -12,9 +12,36 @@ from dataclasses import asdict, dataclass, field, fields
 
 import pygame
 
+from .game.powerups import DEFAULT_POWERUP, POWERUP_BY_ID, POWERUPS
+
 APP_NAME = "Ru-Curve"
 DISCOVERY_PORT = 51737
 DEFAULT_GAME_PORT = 51738
+
+
+# --------------------------------------------------------------------------- #
+#  Einstellungen je Powerup
+# --------------------------------------------------------------------------- #
+@dataclass
+class PowerupSettings:
+    enabled: bool = True
+    duration: float = 2.0
+    strength: float = 1.0
+    charges: int = 3
+    cooldown: float = 6.0
+
+
+def default_powerups() -> dict[str, PowerupSettings]:
+    out: dict[str, PowerupSettings] = {}
+    for meta in POWERUPS:
+        out[meta["id"]] = PowerupSettings(
+            enabled=True,
+            duration=float(meta["duration"] or 0.0),
+            strength=float(meta["strength"] if meta["strength"] is not None else 1.0),
+            charges=int(meta["charges"]),
+            cooldown=float(meta["cooldown"]),
+        )
+    return out
 
 
 # --------------------------------------------------------------------------- #
@@ -31,6 +58,19 @@ def config_dir() -> str:
 
 
 def config_path() -> str:
+    """Pfad zur config.json.
+
+    `RUCURVE_CONFIG` ueberschreibt den Pfad - Tests setzen die Variable, damit
+    sie niemals die echte Konfiguration des Nutzers ueberschreiben.
+    """
+    override = os.environ.get("RUCURVE_CONFIG")
+    if override:
+        d = os.path.dirname(os.path.abspath(override))
+        try:
+            os.makedirs(d, exist_ok=True)
+        except OSError:
+            pass
+        return override
     return os.path.join(config_dir(), "config.json")
 
 
@@ -49,11 +89,8 @@ class GameSettings:
     gap_distance_jitter: float = 0.45  # +/- Anteil Zufall auf den Abstand
     gap_size: float = 42.0           # Laenge einer Luecke (px)
 
-    # Powerup
-    powerup_duration: float = 2.0    # Wirkdauer in s
-    powerup_boost_factor: float = 1.9  # Geschwindigkeits-Faktor beim Speed-Powerup
-    powerup_charges: int = 3         # Ladungen pro Runde
-    powerup_cooldown: float = 6.0    # Sekunden zwischen zwei Aktivierungen
+    # Powerups - je Powerup eigene Werte (siehe game/powerups.py)
+    powerups: dict = field(default_factory=default_powerups)
 
     # Punkte / Matchende
     points_per_opponent: int = 1     # Punkte je ueberlebtem Gegner
@@ -96,18 +133,38 @@ class GameSettings:
         w = int(round(h * aspect))
         return max(600, min(4000, w)), max(400, min(4000, h))
 
+    # ------------------------------------------------------------------ #
+    def powerup_cfg(self, pid: str) -> PowerupSettings:
+        cfg = self.powerups.get(pid)
+        if cfg is None:
+            cfg = default_powerups().get(pid) or PowerupSettings()
+            self.powerups[pid] = cfg
+        return cfg
+
+    def enabled_powerups(self) -> list[str]:
+        out = [p["id"] for p in POWERUPS if self.powerup_cfg(p["id"]).enabled]
+        return out or [DEFAULT_POWERUP]
+
     def clamped(self) -> "GameSettings":
-        c = GameSettings(**asdict(self))
+        import copy
+
+        c = GameSettings(**{f.name: getattr(self, f.name) for f in fields(self)})
+        c.powerups = copy.deepcopy(self.powerups)
+        for pid, meta in POWERUP_BY_ID.items():
+            p = c.powerup_cfg(pid)
+            p.charges = int(_clamp(p.charges, 0, 99))
+            p.cooldown = _clamp(p.cooldown, 0.0, 60)
+            if meta["duration"] is not None:
+                p.duration = _clamp(p.duration, 0.1, 30)
+            if meta["strength"] is not None:
+                lo, hi, _st, _dec = meta["strength_range"]
+                p.strength = _clamp(p.strength, lo, hi)
         c.speed = _clamp(c.speed, 30, 400)
         c.turn_radius = _clamp(c.turn_radius, 12, 400)
         c.line_width = _clamp(c.line_width, 1.5, 20)
         c.gap_distance = _clamp(c.gap_distance, 40, 1200)
         c.gap_distance_jitter = _clamp(c.gap_distance_jitter, 0.0, 0.9)
         c.gap_size = _clamp(c.gap_size, 6, 200)
-        c.powerup_duration = _clamp(c.powerup_duration, 0.2, 10)
-        c.powerup_boost_factor = _clamp(c.powerup_boost_factor, 1.05, 4.0)
-        c.powerup_charges = int(_clamp(c.powerup_charges, 0, 50))
-        c.powerup_cooldown = _clamp(c.powerup_cooldown, 0.0, 30)
         c.points_per_opponent = int(_clamp(c.points_per_opponent, 1, 10))
         c.target_score = int(_clamp(c.target_score, 1, 500))
         c.countdown_seconds = _clamp(c.countdown_seconds, 0.0, 10)
@@ -189,7 +246,7 @@ class Config:
             print(f"[config] Laden fehlgeschlagen ({exc}) - benutze Standardwerte.")
             return cls()
 
-        settings = _from_dict(GameSettings, raw.get("settings", {}))
+        settings = settings_from_dict(raw.get("settings", {}))
         slots_raw = raw.get("slots") or []
         slots = [_from_dict(PlayerSlot, s) for s in slots_raw] or default_slots()
         return cls(
@@ -204,3 +261,31 @@ def _from_dict(dc_type, data: dict):
     known = {f.name for f in fields(dc_type)}
     kwargs = {k: v for k, v in (data or {}).items() if k in known}
     return dc_type(**kwargs)
+
+
+def settings_from_dict(data: dict) -> GameSettings:
+    """GameSettings aus einem JSON-Dict (Datei oder Netzwerk) - inkl. Powerups.
+
+    Aeltere Dateien kennen nur die globalen `powerup_*`-Werte; die werden dann
+    als Startwerte fuer alle Powerups uebernommen.
+    """
+    data = data or {}
+    s = _from_dict(GameSettings, data)
+    pus = default_powerups()
+    raw_pus = data.get("powerups")
+    if isinstance(raw_pus, dict):
+        for pid, vals in raw_pus.items():
+            if pid in pus and isinstance(vals, dict):
+                pus[pid] = _from_dict(PowerupSettings, {**asdict(pus[pid]), **vals})
+    else:  # Migration aus dem alten Format
+        for pid, cfg in pus.items():
+            if "powerup_charges" in data:
+                cfg.charges = int(data["powerup_charges"])
+            if "powerup_cooldown" in data:
+                cfg.cooldown = float(data["powerup_cooldown"])
+            if "powerup_duration" in data and POWERUP_BY_ID[pid]["duration"] is not None:
+                cfg.duration = float(data["powerup_duration"])
+        if "powerup_boost_factor" in data and "speed" in pus:
+            pus["speed"].strength = float(data["powerup_boost_factor"])
+    s.powerups = pus
+    return s
