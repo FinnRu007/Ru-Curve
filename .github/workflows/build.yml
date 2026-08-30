@@ -43,6 +43,12 @@ jobs:
           --name "Ru-Curve" --icon "icon.ico"
           --add-data "assets;assets" --collect-submodules rucurve
           main.py
+      - name: EXE pruefen
+        shell: pwsh
+        run: |
+          $f = Get-Item dist/Ru-Curve.exe
+          "Groesse: $($f.Length) Bytes"
+          if ($f.Length -lt 3MB) { throw "EXE zu klein - Build kaputt" }
       - name: EXE als Artifact hochladen
         uses: actions/upload-artifact@v4
         with:

@@ -32,13 +32,25 @@ if errorlevel 1 echo   (Assets-Generator meldete einen Fehler - Build laeuft tro
 
 echo.
 echo [3/4] EXE mit PyInstaller bauen...
+set ICONOPT=
+if exist "icon.ico" set ICONOPT=--icon "icon.ico"
+rmdir /s /q build dist >nul 2>&1
+del /q "Ru-Curve.spec" >nul 2>&1
 python -m PyInstaller --noconfirm --onefile --windowed ^
     --name "Ru-Curve" ^
-    --icon "icon.ico" ^
+    %ICONOPT% ^
     --add-data "assets;assets" ^
     --collect-submodules rucurve ^
     main.py
 if errorlevel 1 goto :ende_fehler
+
+for %%A in ("dist\Ru-Curve.exe") do set EXESIZE=%%~zA
+if not defined EXESIZE goto :ende_fehler
+if %EXESIZE% LSS 3000000 (
+    echo FEHLER: dist\Ru-Curve.exe ist nur %EXESIZE% Bytes gross - Build kaputt.
+    echo Tipp: "icon.ico" loeschen und erneut bauen.
+    goto :ende_fehler
+)
 
 if not exist "dist\Ru-Curve.exe" (
     echo FEHLER: Build lief durch, aber dist\Ru-Curve.exe fehlt.

@@ -143,6 +143,33 @@ def music_game():
 
 
 # --------------------------------------------------------------------------- #
+def _draw_icon(pygame, size):
+    import math
+
+    surf = pygame.Surface((size, size), pygame.SRCALPHA)
+    pygame.draw.rect(surf, (18, 20, 28), (0, 0, size, size),
+                     border_radius=max(2, size // 5))
+    pts = []
+    n = 120
+    for i in range(n):
+        a = i / n * math.pi * 2.4
+        r = size * (0.12 + i / n * 0.30)
+        pts.append((size / 2 + math.cos(a) * r, size / 2 + math.sin(a) * r * 0.72))
+    if len(pts) > 1:
+        pygame.draw.lines(surf, (54, 122, 246), False, pts, max(2, size // 18))
+    pygame.draw.circle(surf, (232, 76, 61), (int(pts[-1][0]), int(pts[-1][1])),
+                       max(2, size // 20))
+    return surf
+
+
+def _png_bytes(pygame, surf):
+    import io
+
+    buf = io.BytesIO()
+    pygame.image.save(surf, buf, "icon.png")
+    return buf.getvalue()
+
+
 def make_icon():
     try:
         import pygame
@@ -150,29 +177,26 @@ def make_icon():
         print("  (pygame fehlt - Icon uebersprungen)")
         return
     pygame.init()
-    size = 256
-    surf = pygame.Surface((size, size), pygame.SRCALPHA)
-    pygame.draw.rect(surf, (18, 20, 28), (0, 0, size, size), border_radius=48)
-    pts = []
-    import math
 
-    for i in range(120):
-        a = i / 120 * math.pi * 2.4
-        r = 30 + i * 0.7
-        pts.append((size / 2 + math.cos(a) * r, size / 2 + math.sin(a) * r * 0.7))
-    if len(pts) > 1:
-        pygame.draw.lines(surf, (54, 122, 246), False, pts, 14)
-    pygame.draw.circle(surf, (232, 76, 61), (int(pts[-1][0]), int(pts[-1][1])), 12)
+    big = _draw_icon(pygame, 256)
     png = os.path.join(ROOT, "assets", "icon.png")
-    pygame.image.save(surf, png)
+    pygame.image.save(big, png)
     print("  ", os.path.relpath(png, ROOT))
-    try:
-        ico = os.path.join(ROOT, "icon.ico")
-        small = pygame.transform.smoothscale(surf, (64, 64))
-        pygame.image.save(small, ico)
-        print("  ", os.path.relpath(ico, ROOT))
-    except Exception as exc:  # pragma: no cover
-        print("  ico:", exc)
+
+    # gueltige .ico-Datei: ICONDIR + ICONDIRENTRYs + PNG-Bloecke (Windows Vista+)
+    sizes = [16, 24, 32, 48, 64, 128, 256]
+    blobs = [_png_bytes(pygame, _draw_icon(pygame, s)) for s in sizes]
+    header = struct.pack("<HHH", 0, 1, len(sizes))
+    offset = 6 + 16 * len(sizes)
+    entries = b""
+    for s, blob in zip(sizes, blobs):
+        dim = 0 if s >= 256 else s
+        entries += struct.pack("<BBBBHHII", dim, dim, 0, 0, 1, 32, len(blob), offset)
+        offset += len(blob)
+    ico = os.path.join(ROOT, "icon.ico")
+    with open(ico, "wb") as fh:
+        fh.write(header + entries + b"".join(blobs))
+    print("  ", os.path.relpath(ico, ROOT))
 
 
 def main():
