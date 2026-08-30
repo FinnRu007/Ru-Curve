@@ -91,3 +91,14 @@ rucurve/
   ui/widgets.py        handgemachte Widgets (Button, Slider, Zahlenfeld, ...)
 tools/make_assets.py   erzeugt Sounds/Musik/Icon prozedural
 ```
+
+## CI (optional)
+
+Der GitHub-Actions-Workflow liegt als `ci/build.yml.txt` bei (baut Tests + .exe).
+Zum Aktivieren:
+
+```bash
+gh auth refresh -s workflow
+mkdir -p .github/workflows && git mv ci/build.yml.txt .github/workflows/build.yml
+git commit -m "CI aktivieren" && git push
+```
