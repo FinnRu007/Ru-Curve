@@ -177,6 +177,7 @@ python tests/test_smoke_app.py   # ganzer Menü->Lobby->Spiel->Scoreboard-Durchl
 python tests/test_party.py       # ein komplettes Turnier durch alle 11 Minispiele
 python tests/test_party_net.py   # Turnier ueber echte Sockets (Host + Client)
 python tests/test_lan_robust.py  # belegte Ports, Fehlermeldungen, Hostsuche
+python tests/test_party_join.py  # Lobby -> TURNIER: Mitspieler kommt wirklich mit
 python tests/shots.py            # rendert alle Szenen als PNG nach tests/_shots/
 python tests/shots_party.py      # rendert jedes Minispiel nach tests/_shots_party/
 ```

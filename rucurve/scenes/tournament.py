@@ -77,6 +77,12 @@ class TournamentScene:
         self.message = ""
         self._tick_left = 99
         self._applause_t = 0.0
+        # Nachrichten, die die Lobby beim Szenenwechsel schon abgeholt hat -
+        # sie duerfen NICHT verlorengehen (sonst kommt pt_game nie an).
+        self._inbox: list = []
+        self._last_payload: dict | None = None
+        self._resync_t = 0.0
+        self._got_go = False
 
     # ================================================================== #
     #  Lebenszyklus
@@ -127,6 +133,7 @@ class TournamentScene:
         cfg = cls.make_config(random.Random(seed), self.players)
         payload = {"type": "pt_game", "i": self.tour.index, "game": gid,
                    "cfg": cfg, "seed": seed}
+        self._last_payload = payload
         if self.host:
             self.host.broadcast(payload)
         self._build_game(gid, cfg, seed)
@@ -238,6 +245,12 @@ class TournamentScene:
                     self.live[int(k)] = v
             elif t == "pt_input" and self.game is not None:
                 self.game.apply_input(cid, msg)
+            elif t == "pt_need_game":
+                # Der Client hat den Spielstart verpasst - nochmal schicken.
+                if self._last_payload is not None:
+                    again = dict(self._last_payload)
+                    again["started"] = self.phase in ("play", "wait", "result")
+                    self.host.send(cid, again)
             elif t == "__connect__":
                 # Jemand verbindet sich, waehrend das Turnier schon laeuft
                 self.host.send(cid, {"type": "pt_busy",
@@ -250,14 +263,25 @@ class TournamentScene:
     def _pump_client(self):
         if not self.client:
             return
-        for msg in self.client.poll():
+        msgs, self._inbox = self._inbox, []
+        msgs = msgs + self.client.poll()
+        for msg in msgs:
             t = msg.get("type")
             if t == "pt_game":
-                self.tour.index = int(msg.get("i", 0))
-                self._build_game(msg.get("game", ""), msg.get("cfg") or {},
-                                 int(msg.get("seed", 0)))
+                same = (self.game is not None
+                        and self.tour.index == int(msg.get("i", -1))
+                        and self.game_cls is not None
+                        and self.game_cls.id == msg.get("game"))
+                if not same:
+                    self.tour.index = int(msg.get("i", 0))
+                    self._build_game(msg.get("game", ""), msg.get("cfg") or {},
+                                     int(msg.get("seed", 0)))
+                if msg.get("started") and self.phase == "intro":
+                    self._begin_play()
             elif t == "pt_go":
-                self._begin_play()
+                self._got_go = True
+                if self.phase == "intro":
+                    self._begin_play()
             elif t == "pt_state" and self.game is not None:
                 self.game.apply_state(msg.get("s") or {})
             elif t == "pt_live":
@@ -340,6 +364,7 @@ class TournamentScene:
         self.phase_t += dt
         self._pump_host()
         self._pump_client()
+        self._client_watchdog(dt)
 
         if self._applause_t > 0:
             self._applause_t -= dt
@@ -373,6 +398,24 @@ class TournamentScene:
         elif self.phase == "result":
             if self.is_host and self.phase_t > 12.0:
                 self._advance_from_result()
+
+    def _client_watchdog(self, dt):
+        """Client: nachfragen, wenn Spielansage oder Startschuss fehlen.
+
+        Ohne das bleibt ein Mitspieler ewig vor einem leeren Bildschirm sitzen,
+        falls eine Nachricht beim Szenenwechsel verlorenging.
+        """
+        if self.is_host or not self.client:
+            return
+        stuck = self.game is None
+        if not stuck and self.phase == "intro" and self.game_cls is not None:
+            stuck = self.phase_t > self.game_cls.intro_seconds + 2.5
+        if not stuck:
+            return
+        self._resync_t -= dt
+        if self._resync_t <= 0:
+            self._resync_t = 1.2
+            self.client.send({"type": "pt_need_game"})
 
     def _advance_from_result(self):
         if not self.is_host:
@@ -417,7 +460,9 @@ class TournamentScene:
             U.leaderboard(surf, self.app.fonts, side, self._standing_rows(),
                           heading="Gesamt", compact=len(self.players) > 8)
 
-        if self.phase == "intro":
+        if self.phase == "intro" and self.game_cls is None:
+            self._draw_waiting(surf)
+        elif self.phase == "intro":
             self._draw_intro(surf)
         elif self.phase == "play" and self.game is not None:
             self.game.draw(surf)
@@ -456,6 +501,14 @@ class TournamentScene:
             col = U.ACCENT if i <= self.tour.index else U.LINE
             pygame.draw.circle(surf, col, (x + i * 18, HEADER_H // 2), 5)
         draw_text(surf, fonts.body(14), "ESC = beenden", U.MUTED, (w - 130, 28))
+
+    def _draw_waiting(self, surf):
+        area = self.play_rect()
+        fonts = self.app.fonts
+        U.title(surf, fonts, "Warte auf den Host ...", area.centery - 40,
+                center_x=area.centerx)
+        U.subtitle(surf, fonts, "Das naechste Minispiel wird gleich verteilt.",
+                   area.centery + 20, center_x=area.centerx)
 
     def _draw_intro(self, surf):
         area = self.play_rect()

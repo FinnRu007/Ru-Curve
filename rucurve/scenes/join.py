@@ -239,7 +239,9 @@ class ClientLobbyScene(BaseMenuScene):
                     break
 
     def update(self, dt: float) -> None:
-        for msg in self.client.poll():
+        msgs = self.client.poll()
+        for i, msg in enumerate(msgs):
+            rest = msgs[i + 1:]
             t = msg.get("type")
             if t == "welcome":
                 self.cid = msg.get("cid")
@@ -268,10 +270,14 @@ class ClientLobbyScene(BaseMenuScene):
 
                 party = [PartyPlayer.from_wire(d, self.cid)
                          for d in msg.get("players", [])]
-                self.app.set_scene(TournamentScene(
+                scene = TournamentScene(
                     self.app, party, client=self.client, cid=self.cid,
                     order=msg.get("order") or [],
-                    points_top=int(msg.get("points_top", 10))))
+                    points_top=int(msg.get("points_top", 10)))
+                # Wichtig: was im selben Paket kam (z.B. pt_game), mitgeben -
+                # sonst ist es weg und der Mitspieler sieht nichts.
+                scene._inbox = list(rest)
+                self.app.set_scene(scene)
                 return
             elif t == "pt_busy":
                 self.status = ("Der Host spielt gerade ein Turnier (Spiel %s von %s). "

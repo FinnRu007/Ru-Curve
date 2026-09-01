@@ -89,6 +89,17 @@ class LobbyScene(BaseMenuScene):
             pid += 1
         self._next_pid = pid
 
+    def _unique_name(self, name: str) -> str:
+        """Gleiche Namen sind in der Rangliste nicht auseinanderzuhalten."""
+        taken = {p.name for p in self.players}
+        if name not in taken:
+            return name
+        for n in range(2, 20):
+            cand = "%s %d" % (name[:12], n)
+            if cand not in taken:
+                return cand
+        return name
+
     def _random_powerup(self) -> str:
         """Bots spielen auf 'Zufaellig' - dann wuerfeln sie jede Runde neu."""
         return RANDOM_ID
@@ -356,8 +367,9 @@ class LobbyScene(BaseMenuScene):
                     if ci in used:
                         ci = self._free_color(used)
                     used.add(ci)
-                    pd = PlayerDef(self._next_pid, str(entry.get("name", "LAN"))[:14], ci,
-                                   entry.get("powerup", "speed"), client_id=cid)
+                    pd = PlayerDef(self._next_pid,
+                                   self._unique_name(str(entry.get("name", "LAN"))[:14]),
+                                   ci, entry.get("powerup", "speed"), client_id=cid)
                     self.players.append(pd)
                     self._client_players[cid].append(pd.pid)
                     self._next_pid += 1
