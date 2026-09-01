@@ -22,6 +22,24 @@ def draw_text(surf, font, text, color, pos, *, center=False, right=False):
     return rect
 
 
+def wrap_text(font, text: str, max_w: int, max_lines: int = 3) -> list:
+    """Bricht an Wortgrenzen um - nicht mitten im Wort."""
+    words = str(text).split()
+    lines, cur = [], ""
+    for w in words:
+        probe = (cur + " " + w).strip()
+        if cur and font.size(probe)[0] > max_w:
+            lines.append(cur)
+            cur = w
+            if len(lines) >= max_lines:
+                break
+        else:
+            cur = probe
+    if cur and len(lines) < max_lines:
+        lines.append(cur)
+    return lines
+
+
 def key_name(code: int) -> str:
     try:
         n = pygame.key.name(code)

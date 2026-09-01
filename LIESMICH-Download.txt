@@ -10,3 +10,22 @@ ist ungefaehrlich; der komplette Quellcode liegt offen auf GitHub:
 Wer sichergehen will, baut die EXE mit build_exe.bat selbst.
 
 Beim ersten "Ueber LAN hosten" fragt die Windows-Firewall - auf "Zulassen".
+
+--------------------------------------------------------------------
+ZUSAMMEN UEBER LAN SPIELEN
+--------------------------------------------------------------------
+1. Auf EINEM PC:      Hauptmenue -> "Uber LAN hosten".
+                      Oben rechts steht die Adresse, z.B. 192.168.178.47:51738
+2. Auf den anderen:   Hauptmenue -> "Uber LAN beitreten".
+                      Gefundene Hosts stehen in der Liste, sonst die Adresse
+                      von Punkt 1 eintippen.
+3. Wenn Windows fragt, ob das Programm ins Netzwerk darf: ZULASSEN
+   (Haken bei "Privates Netzwerk" setzen).
+
+Klappt es nicht, sagt das Spiel jetzt genau warum:
+  "Verbindung abgelehnt"  -> auf dem anderen PC laeuft kein Host
+  "Keine Antwort"         -> Firewall blockt: tools/firewall_freigeben.bat
+                             mit Rechtsklick als Administrator ausfuehren
+  "Kein Host in der Liste"-> Adresse einfach von Hand eintippen, das geht immer
+
+Beide Rechner muessen im selben Netz sein (gleiches WLAN / gleicher Router).

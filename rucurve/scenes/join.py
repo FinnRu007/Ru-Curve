@@ -8,11 +8,12 @@ import pygame
 
 from .. import theme as T
 from ..colors import color_for
-from ..config import DEFAULT_GAME_PORT
+from ..config import DEFAULT_GAME_PORT, DISCOVERY_PORT
 from ..game.powerups import PICKER_OPTIONS, powerup_label
 from ..net.client import GameClient
-from ..net.discovery import Listener
-from ..ui.widgets import Button, Dropdown, TextInput, draw_text
+from ..net.discovery import Listener, local_ip
+from ..net.errors import friendly
+from ..ui.widgets import Button, Dropdown, TextInput, draw_text, wrap_text
 from .common import BaseMenuScene
 
 _PU_OPTIONS = PICKER_OPTIONS
@@ -25,8 +26,8 @@ class JoinScene(BaseMenuScene):
     def __init__(self, app) -> None:
         super().__init__(app)
         self.listener = Listener()
-        self.manual_ip = "127.0.0.1"
-        self.status = ""
+        self.manual_ip = "192.168."
+        self.status = ("", "")
 
     def on_enter(self) -> None:
         self.app.audio.music("menu")
@@ -59,13 +60,16 @@ class JoinScene(BaseMenuScene):
         self._connect(raw, port)
 
     def _connect(self, ip: str, port: int) -> None:
-        self.status = f"Verbinde mit {ip}:{port} ..."
+        if not ip:
+            self.status = ("Keine Adresse eingegeben", "")
+            return
+        self.status = ("Verbinde mit %s:%d ..." % (ip, port), "")
         client = GameClient()
-        if client.connect(ip, port):
+        if client.connect(ip, port, timeout=8.0):
             self.app.audio.play("click")
             self.app.set_scene(ClientLobbyScene(self.app, client, self.listener))
         else:
-            self.status = f"Verbindung fehlgeschlagen: {client.error}"
+            self.status = friendly(client.error, ip, port)
 
     def _back(self) -> None:
         from .menu import MenuScene
@@ -118,10 +122,38 @@ class JoinScene(BaseMenuScene):
             self._host_buttons.append((b, hinfo))
             y += 60
 
-        if self.status:
-            draw_text(surf, self.app.fonts.body(15), self.status, T.TEXT, (50, h - 200))
+        self._draw_help(surf, w, h)
         for wgt in self.widgets:
             wgt.draw(surf, self.app.fonts)
+
+    def _draw_help(self, surf, w, h) -> None:
+        fonts = self.app.fonts
+        head, tip = self.status if isinstance(self.status, tuple) else (self.status, "")
+        if head:
+            bw = min(760, w - 96)
+            font = fonts.body(13)
+            lines = wrap_text(font, tip, bw - 28) if tip else []
+            box = pygame.Rect(48, h - 250, bw, 44 + 19 * len(lines))
+            bad = not head.startswith("Verbinde ")
+            pygame.draw.rect(surf, (253, 238, 238) if bad else T.SURFACE, box,
+                             border_radius=T.R_SM)
+            pygame.draw.rect(surf, T.DANGER if bad else T.BORDER, box, width=2,
+                             border_radius=T.R_SM)
+            draw_text(surf, fonts.body_bold(16), head,
+                      T.DANGER if bad else T.TEXT, (box.x + 14, box.y + 9))
+            for i, line in enumerate(lines):
+                draw_text(surf, font, line, T.TEXT_MUTED,
+                          (box.x + 14, box.y + 34 + i * 19))
+
+        if self.listener.error:
+            draw_text(surf, fonts.body(13),
+                      "Hostsuche blockiert (Port %d). Firewall pruefen - "
+                      "IP-Eingabe geht trotzdem." % DISCOVERY_PORT,
+                      T.DANGER, (48, h - 246))
+
+        draw_text(surf, fonts.body(13),
+                  "Deine IP: %s   -   der Host zeigt seine Adresse in der Lobby oben rechts."
+                  % local_ip(), T.TEXT_MUTED, (48, h - 44))
 
 
 # =========================================================================== #
@@ -241,6 +273,10 @@ class ClientLobbyScene(BaseMenuScene):
                     order=msg.get("order") or [],
                     points_top=int(msg.get("points_top", 10))))
                 return
+            elif t == "pt_busy":
+                self.status = ("Der Host spielt gerade ein Turnier (Spiel %s von %s). "
+                               "Du bist beim naechsten dabei." %
+                               (msg.get("i", "?"), msg.get("n", "?")))
             elif t == "__disconnect__":
                 self.status = "Verbindung zum Host verloren."
                 self.client.close()

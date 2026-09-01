@@ -45,6 +45,35 @@ Dann gibt es zwei Knoepfe:
 Ueber LAN werden Hosts im Netzwerk automatisch gefunden; sonst die IP eintippen
 (auch `IP:Port` fuer Portweiterleitung). Der Host bestimmt alle Einstellungen.
 
+## LAN einrichten (wenn es nicht klappt)
+
+**Auf dem Host-PC:** Hauptmenü → *Über LAN hosten*. Oben rechts in der Lobby
+steht groß die Adresse, z. B. `192.168.178.47:51738` — genau die geben die
+anderen ein. Der Host muss in der Lobby bleiben, bis alle drin sind.
+
+**Auf den anderen PCs:** Hauptmenü → *Über LAN beitreten*. Gefundene Hosts
+erscheinen automatisch in der Liste; sonst die Adresse eintippen (`IP` oder
+`IP:Port`).
+
+Häufige Stolpersteine und was die Meldung bedeutet:
+
+| Meldung | Ursache | Lösung |
+|---|---|---|
+| **Verbindung abgelehnt** | Auf dem Ziel-PC läuft kein Host | Dort *Über LAN hosten* wählen und in der Lobby bleiben |
+| **Keine Antwort** (Zeitüberschreitung) | Windows-Firewall blockt | Auf dem Host-PC `tools/firewall_freigeben.bat` als **Administrator** ausführen |
+| **Adresse nicht gefunden** | IP vertippt | Adresse aus der Host-Lobby abschreiben |
+| **Netzwerk nicht erreichbar** | verschiedene Netze | Beide ins selbe WLAN / an denselben Router |
+| **Kein Host in der Liste** | UDP-Suche blockiert | Firewall freigeben — oder die IP von Hand eintippen, das geht immer |
+| **Alle Ports belegt** | alte Ru-Curve-Instanz läuft noch | Im Task-Manager beenden |
+
+Wichtig: Windows fragt beim ersten Hosten, ob das Programm ins Netzwerk darf —
+dort **Zulassen** klicken (und den Haken bei *Privates Netzwerk* setzen). Wurde
+das einmal abgelehnt, hilft `tools/firewall_freigeben.bat`.
+
+Ist der Standard-Port belegt, weicht der Host automatisch auf den nächsten
+freien aus (51738 … 51745) und zeigt ihn an — deshalb immer die Adresse aus der
+Lobby verwenden statt sie zu raten.
+
 ## Das Turnier
 
 Der Host legt fest, wie viele Minispiele gespielt werden (Standard 8) und welche
@@ -147,6 +176,7 @@ python tests/test_net.py         # Host <-> Client über Loopback
 python tests/test_smoke_app.py   # ganzer Menü->Lobby->Spiel->Scoreboard-Durchlauf, headless
 python tests/test_party.py       # ein komplettes Turnier durch alle 11 Minispiele
 python tests/test_party_net.py   # Turnier ueber echte Sockets (Host + Client)
+python tests/test_lan_robust.py  # belegte Ports, Fehlermeldungen, Hostsuche
 python tests/shots.py            # rendert alle Szenen als PNG nach tests/_shots/
 python tests/shots_party.py      # rendert jedes Minispiel nach tests/_shots_party/
 ```
@@ -175,6 +205,7 @@ rucurve/
                        tournament (Turnier-Ablauf)
   ui/widgets.py        handgemachte Widgets (Button, Slider, Zahlenfeld, ...)
 tools/make_assets.py   erzeugt Soundeffekte + Icon prozedural
+tools/firewall_freigeben.bat   gibt Ru-Curve in der Windows-Firewall frei
 ```
 
 ## CI (optional)

@@ -13,7 +13,36 @@ import time
 
 from ..config import DISCOVERY_PORT
 
-_BROADCAST_ADDRS = ("255.255.255.255", "<broadcast>")
+def local_ips() -> list:
+    """Alle IPv4-Adressen dieses Rechners (mehrere bei WLAN + LAN + VPN)."""
+    ips = set()
+    try:
+        ips.add(local_ip())
+    except OSError:
+        pass
+    try:
+        for info in socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET):
+            ips.add(info[4][0])
+    except OSError:
+        pass
+    return sorted(a for a in ips if a and not a.startswith("127."))
+
+
+def broadcast_targets() -> list:
+    """Wohin das Suchsignal geht.
+
+    Nur 255.255.255.255 reicht oft nicht - viele Windows-Setups und Router
+    verwerfen den globalen Broadcast. Darum zusaetzlich der Broadcast des
+    eigenen Subnetzes (z.B. 192.168.178.255) fuer jede lokale Adresse.
+    """
+    targets = ["255.255.255.255"]
+    for ip in local_ips():
+        parts = ip.split(".")
+        if len(parts) == 4:
+            sub = ".".join(parts[:3]) + ".255"
+            if sub not in targets:
+                targets.append(sub)
+    return targets
 
 
 class Beacon:
@@ -29,10 +58,15 @@ class Beacon:
         threading.Thread(target=self._loop, name="beacon", daemon=True).start()
 
     def _loop(self) -> None:
+        targets = broadcast_targets()
+        n = 0
         while self._running and self._sock:
+            n += 1
+            if n % 10 == 0:                 # Netzwerk kann sich aendern (WLAN)
+                targets = broadcast_targets()
             try:
                 payload = json.dumps({"app": "ru-curve", **self._info()}).encode("utf-8")
-                for addr in _BROADCAST_ADDRS:
+                for addr in targets:
                     try:
                         self._sock.sendto(payload, (addr, DISCOVERY_PORT))
                     except OSError:
@@ -57,14 +91,16 @@ class Listener:
         self._sock: socket.socket | None = None
         self._lock = threading.Lock()
         self._found: dict[str, dict] = {}   # ip -> {name, port, players, max, ts}
+        self.error: str | None = None
 
     def start(self) -> None:
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         try:
             sock.bind(("", DISCOVERY_PORT))
-        except OSError:
+        except OSError as exc:
             sock.close()
+            self.error = str(exc)
             return
         sock.settimeout(0.5)
         self._sock = sock

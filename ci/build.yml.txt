@@ -26,6 +26,7 @@ jobs:
           python tests/test_smoke_app.py
           python tests/test_party.py
           python tests/test_party_net.py
+          python tests/test_lan_robust.py
 
   build:
     needs: test

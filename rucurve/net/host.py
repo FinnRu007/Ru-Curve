@@ -22,8 +22,16 @@ class _Client:
 
 
 class GameHost:
+    """TCP-Host. Ist der Wunsch-Port belegt (z.B. weil noch eine alte Instanz
+    laeuft), wird automatisch der naechste freie Port genommen - sonst startet
+    der Host stillschweigend nicht und die anderen bekommen nur
+    "Verbindung verweigert"."""
+
+    PORT_TRIES = 8
+
     def __init__(self, port: int) -> None:
         self.port = port
+        self.wanted_port = port
         self._srv: socket.socket | None = None
         self._clients: dict[int, _Client] = {}
         self._next_id = 1
@@ -33,12 +41,36 @@ class GameHost:
 
     # ------------------------------------------------------------------ #
     def start(self) -> None:
-        self._srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self._srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        self._srv.bind(("0.0.0.0", self.port))
-        self._srv.listen(16)
-        self._running = True
-        threading.Thread(target=self._accept_loop, name="host-accept", daemon=True).start()
+        last = None
+        for offset in range(self.PORT_TRIES):
+            port = self.wanted_port + offset
+            srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            # Achtung Windows: SO_REUSEADDR erlaubt dort, einen bereits
+            # belegten Port zu UEBERNEHMEN - dann landen Verbindungen mal hier,
+            # mal beim alten Prozess. Wir wollen das Gegenteil: sauber
+            # scheitern und ausweichen.
+            excl = getattr(socket, "SO_EXCLUSIVEADDRUSE", None)
+            if excl is not None:
+                try:
+                    srv.setsockopt(socket.SOL_SOCKET, excl, 1)
+                except OSError:
+                    pass
+            else:
+                srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            try:
+                srv.bind(("0.0.0.0", port))
+                srv.listen(16)
+            except OSError as exc:
+                srv.close()
+                last = exc
+                continue
+            self._srv = srv
+            self.port = port
+            self._running = True
+            threading.Thread(target=self._accept_loop, name="host-accept",
+                             daemon=True).start()
+            return
+        raise OSError("Kein freier Port ab %d gefunden: %s" % (self.wanted_port, last))
 
     def stop(self) -> None:
         self._running = False

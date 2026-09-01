@@ -14,7 +14,7 @@ from ..game.powerups import PICKER_OPTIONS, RANDOM_ID, powerup_label
 from ..net.discovery import Beacon, local_ip
 from ..net.host import GameHost
 from ..session import GameSession, PlayerDef
-from ..ui.widgets import Button, Dropdown, TextInput, draw_text
+from ..ui.widgets import Button, Dropdown, TextInput, draw_text, wrap_text
 from .common import BaseMenuScene
 
 _PU_OPTIONS = PICKER_OPTIONS
@@ -33,6 +33,7 @@ class LobbyScene(BaseMenuScene):
         self._next_pid = 0
         self._client_players: dict[int, list[int]] = {}   # cid -> [pid,...]
         self._dropdowns: list[Dropdown] = []
+        self.host_error: tuple | None = None
 
     # ------------------------------------------------------------------ #
     def adopt(self, session: GameSession) -> None:
@@ -55,6 +56,9 @@ class LobbyScene(BaseMenuScene):
                 try:
                     self.host.start()
                 except OSError as exc:
+                    from ..net.errors import host_problem
+
+                    self.host_error = host_problem(exc)
                     print(f"[lobby] Host-Start fehlgeschlagen: {exc}")
                     self.host = None
                 if self.host:
@@ -99,7 +103,7 @@ class LobbyScene(BaseMenuScene):
     def _beacon_info(self) -> dict:
         return {
             "name": f"{socket.gethostname()}",
-            "port": DEFAULT_GAME_PORT,
+            "port": self.host.port if self.host else DEFAULT_GAME_PORT,
             "players": len(self.players),
             "max": 12,
         }
@@ -127,6 +131,36 @@ class LobbyScene(BaseMenuScene):
         self.widgets.append(Button((w - 410, h - 78, 182, 50), "TURNIER",
                                    self._start_tournament, "primary"))
         self.widgets.append(Button((w - 220, by, 172, 40), "Zurueck", self._back, "ghost"))
+
+    def _draw_net_box(self, surf, w) -> None:
+        """Deutlich sichtbar: worauf muessen die anderen verbinden?"""
+        fonts = self.app.fonts
+        box = pygame.Rect(w - 430, 26, 382, 78)
+        if self.mode != "host":
+            if self.mode == "local":
+                draw_text(surf, fonts.body(13),
+                          "Fuer LAN: zurueck und 'Uber LAN hosten' waehlen",
+                          T.TEXT_MUTED, (box.x + 90, 60))
+            return
+        if not self.host:
+            pygame.draw.rect(surf, (253, 238, 238), box, border_radius=T.R_SM)
+            pygame.draw.rect(surf, T.DANGER, box, width=2, border_radius=T.R_SM)
+            head, tip = self.host_error or ("Host konnte nicht starten", "")
+            draw_text(surf, fonts.body_bold(15), head, T.DANGER, (box.x + 14, box.y + 8))
+            for i, line in enumerate(wrap_text(fonts.body(12), tip, box.w - 28)):
+                draw_text(surf, fonts.body(12), line, T.TEXT_MUTED,
+                          (box.x + 14, box.y + 30 + i * 16))
+            return
+        pygame.draw.rect(surf, T.SURFACE, box, border_radius=T.R_SM)
+        pygame.draw.rect(surf, T.OK, (box.x, box.y, 5, box.h), border_radius=2)
+        draw_text(surf, fonts.body(12), "Die anderen geben das hier ein:",
+                  T.TEXT_MUTED, (box.x + 16, box.y + 8))
+        addr = "%s:%d" % (local_ip(), self.host.port)
+        draw_text(surf, fonts.display(26), addr, T.TEXT, (box.x + 16, box.y + 26))
+        n = self.host.client_count
+        info = "%d verbunden" % n if n else "warte auf Mitspieler ..."
+        draw_text(surf, fonts.body(12), info, T.OK if n else T.TEXT_MUTED,
+                  (box.x + 16, box.y + 58))
 
     def _build_row(self, x, y, w, p: PlayerDef) -> None:
         self.widgets.append(_Swatch((x, y, 34, 34), p, self))
@@ -373,12 +407,9 @@ class LobbyScene(BaseMenuScene):
         w, h = self.size
         draw_text(surf, self.app.fonts.display(32), self.title, T.TEXT, (48, 40))
         sub = f"{len(self.players)} Spieler   -   Ziel: {self.app.config.settings.target_score} Punkte"
-        if self.mode == "host" and self.host:
-            sub += f"   -   deine IP: {local_ip()}:{DEFAULT_GAME_PORT}   ({self.host.client_count} verbunden)"
-        elif self.mode == "host":
-            sub += "   -   HOST-START FEHLGESCHLAGEN (Port belegt?)"
         draw_text(surf, self.app.fonts.body(16), sub, T.TEXT_MUTED, (50, 84))
         pygame.draw.line(surf, T.BORDER, (48, 116), (w - 48, 116), 1)
+        self._draw_net_box(surf, w)
 
         for wgt in self.widgets:
             wgt.draw(surf, self.app.fonts)

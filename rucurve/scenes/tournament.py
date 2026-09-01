@@ -238,6 +238,12 @@ class TournamentScene:
                     self.live[int(k)] = v
             elif t == "pt_input" and self.game is not None:
                 self.game.apply_input(cid, msg)
+            elif t == "__connect__":
+                # Jemand verbindet sich, waehrend das Turnier schon laeuft
+                self.host.send(cid, {"type": "pt_busy",
+                                     "game": self.game_cls.name if self.game_cls else "",
+                                     "i": self.tour.index + 1,
+                                     "n": len(self.tour.order)})
             elif t == "__disconnect__":
                 self._reports.pop(cid, None)
 
