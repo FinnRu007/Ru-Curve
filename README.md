@@ -1,13 +1,14 @@
 # Ru-Curve
 
-Ein Kurvenspiel im Stil von **Achtung die Kurve** / *Curve Fever* -
-zusammen an **einem PC** (geteilte Tastatur) oder über **LAN**.
+Ein Partyspiel-Turnier fuer viele Leute an einem PC oder ueber LAN: **elf kurze
+Minispiele** laufen hintereinander ab, nach jedem gibt es Punkte nach Platzierung,
+und eine Rangliste zeigt jederzeit, wer vorn liegt. Eines der Minispiele ist
+**Achtung die Kurve** - das Spiel, aus dem das Projekt entstanden ist; es laesst
+sich auch weiterhin allein als klassisches Match spielen.
 
-Man ist ein Punkt, der eine Linie hinter sich herzieht und ab und zu kurz eine
-Lücke lässt. Gelenkt wird mit zwei benachbarten Tasten (links / rechts), eine
-dritte Taste löst das gewählte **Powerup** aus. Raus ist, wer den Rand oder eine
-Linie berührt. Nach jeder Runde gibt es platzabhängige Punkte; wer die
-Zielpunktzahl erreicht, gewinnt das Match.
+Der Trick, mit dem alles zusammenpasst: **jeder Spieler hat genau drei Tasten**
+(links, Aktion, rechts). Damit koennen beliebig viele Leute an einer einzigen
+Tastatur mitspielen, und dieselbe Steuerung funktioniert unveraendert uebers Netz.
 
 ## Starten
 
@@ -34,26 +35,57 @@ PyInstaller-Fehlalarm, der komplette Quellcode liegt hier offen.
 
 ## Spielen
 
-* **An einem PC** – Lobby öffnen, Spieler (`+ Spieler`) und/oder Bots (`+ Bot`)
-  hinzufügen, `Start`.
-* **Über LAN hosten** – öffnet einen Host; die eigene IP steht in der Lobby.
-* **Über LAN beitreten** – gefundene Hosts werden automatisch gelistet, sonst
-  IP-Adresse eintippen. Der Host bestimmt alle Einstellungen.
+Im Hauptmenue **An einem PC spielen**, **Uber LAN hosten** oder **Uber LAN
+beitreten** waehlen. In der Lobby stellst du Spieler, Bots, Namen und Farben ein.
+Dann gibt es zwei Knoepfe:
 
-Der Host rechnet die Simulation, die Clients senden nur ihre Tasteneingaben und
-zeigen den vom Host geschickten Spielstand an.
+* **TURNIER** - der Partymodus mit allen Minispielen (siehe unten)
+* **Kurve starten** - nur Achtung die Kurve, wie bisher
+
+Ueber LAN werden Hosts im Netzwerk automatisch gefunden; sonst die IP eintippen
+(auch `IP:Port` fuer Portweiterleitung). Der Host bestimmt alle Einstellungen.
+
+## Das Turnier
+
+Der Host legt fest, wie viele Minispiele gespielt werden (Standard 8) und welche
+ueberhaupt vorkommen. Vor jedem Spiel gibt es eine kurze Erklaerung und einen
+Countdown, danach wird gespielt, ausgewertet und Punkte verteilt:
+**Platz 1 bekommt 10 Punkte**, der letzte Platz 1 - dazwischen linear. Bei
+Gleichstand entscheidet, wer schneller war. Rechts laeuft immer die Gesamtrangliste
+mit.
+
+| # | Minispiel | Worum es geht |
+|---|---|---|
+| 1 | **Reaktion** | Eine deiner drei Tasten leuchtet auf - druecke sie so schnell wie moeglich. Zu frueh gedrueckt zaehlt als Fehler. |
+| 2 | **Merken** | Eine Tastenfolge wird vorgespielt, du druckst sie nach. Jede Stufe wird laenger. |
+| 3 | **Kopfrechnen** | 10 Aufgaben, je 5 Sekunden, drei Antworten auf deinen drei Tasten. |
+| 4 | **Flaecheninhalt** | Rechteck, Dreieck, Kreis - Flaeche bestimmen, gleiche Regeln wie beim Kopfrechnen. |
+| 5 | **Schaetzen** | Wie viele Punkte sind auf dem Feld? Vier Sekunden pro Bild. |
+| 6 | **Ausreisser finden** | Ein Feld im Raster hat eine andere Farbe - in welchem Drittel liegt es? |
+| 7 | **Haemmern** | Acht Sekunden lang so schnell wie moeglich auf die Tasten hauen. |
+| 8 | **Stopp!** | Einen hin- und herlaufenden Zeiger moeglichst genau in der Mitte anhalten. |
+| 9 | **Zeitgefuehl** | Druecken, wenn genau die geforderte Zeit vorbei ist - die Uhr verschwindet unterwegs. |
+| 10 | **Zielen** | Maus-Spiel: Ziele anklicken. Sitzen mehrere an einem PC, ist jeder einzeln dran. |
+| 11 | **Achtung die Kurve** | Eine kurze Runde des Originalspiels - wer am laengsten ueberlebt, gewinnt. |
+
+Wie das ueber LAN zusammenlaeuft: der Host wuerfelt die Aufgaben aus und schickt
+sie an alle, jede Maschine spielt ihre eigenen Leute und meldet das Ergebnis
+zurueck, der Host vergibt die Punkte. Bei Achtung die Kurve rechnet der Host die
+komplette Runde und schickt Schnappschuesse - dort ist er die einzige Wahrheit.
 
 ## Steuerung
 
 Menü **Steuerung**: bis zu sechs lokale Spieler-Slots, jeweils frei belegbare
-Tasten für *Links / Rechts / Powerup*, Name, Farbe und Powerup-Auswahl.
+Tasten für *Links / Rechts / Aktion*, Name, Farbe und Powerup-Auswahl. Diese drei
+Tasten steuern alles: bei Achtung die Kurve lenken sie und lösen das Powerup aus,
+in den Minispielen sind sie die drei Antwortmöglichkeiten.
 Doppelbelegungen werden rot markiert. (Hardware-Tastaturen erkennen oft nur
 ~6 Tasten gleichzeitig – für viele Spieler an einem PC ggf. mehrere Rechner per
 LAN koppeln.)
 
 ## Einstellungen
 
-Menü **Einstellungen** – in fünf aufklappbare Bereiche sortiert (Bereich
+Menü **Einstellungen** – in sechs aufklappbare Bereiche sortiert (Bereich
 anklicken zum Auf-/Zuklappen), jeder Wert als Schieberegler **und** Zahlenfeld:
 
 * **System** – Spielfeld-Größe, Fenstergröße, Vollbild
@@ -61,13 +93,15 @@ anklicken zum Auf-/Zuklappen), jeder Wert als Schieberegler **und** Zahlenfeld:
 * **Spiel** – Geschwindigkeit, Lenkradius, Linienbreite, Lücken-Abstand und
   -Größe, Punkte pro Gegner, Zielpunktzahl, Countdown, Zeitlimit,
   Selbstkollision
+* **Turnier** – Anzahl der Minispiele, Punkte für Platz 1, Reihenfolge mischen
+  und ein An/Aus-Schalter für jedes einzelne Minispiel
 * **Bots** – Anzahl beim Start, Stärke (0 = harmlos, 1.0 = sehr stark)
 * **Powerups** – jedes Powerup einzeln: An/Aus, Wirkdauer, Stärke, Ladungen pro
   Runde und Abklingzeit; dazu „Alle an" / „Alle aus"
 
 Gespeichert wird alles in `%APPDATA%/Ru-Curve/config.json`.
 
-## Powerups
+## Powerups (bei Achtung die Kurve)
 
 Jeder Spieler wählt in der Lobby sein Powerup, die dritte Taste löst es aus.
 Ganz oben in der Liste steht **Zufällig** – dann wird zu Beginn *jeder* Runde
@@ -111,7 +145,10 @@ Spalten, damit auch große Runden komplett lesbar bleiben.
 python tests/test_core.py        # Simulation, Kollision, Spawns, Punkte, Powerup, Protokoll
 python tests/test_net.py         # Host <-> Client über Loopback
 python tests/test_smoke_app.py   # ganzer Menü->Lobby->Spiel->Scoreboard-Durchlauf, headless
+python tests/test_party.py       # ein komplettes Turnier durch alle 11 Minispiele
+python tests/test_party_net.py   # Turnier ueber echte Sockets (Host + Client)
 python tests/shots.py            # rendert alle Szenen als PNG nach tests/_shots/
+python tests/shots_party.py      # rendert jedes Minispiel nach tests/_shots_party/
 ```
 
 ## Projektstruktur
@@ -126,8 +163,16 @@ rucurve/
   audio.py             nur Soundeffekte (Musik deaktiviert)
   game/                world.py (Simulation), curve.py, collision.py, powerups.py, bots.py
   net/                 protocol.py, host.py, client.py, discovery.py
+  party/               Turnier-Modus
+    base.py            MiniGame-Basis, Spieler, Ergebnisse, Netz-Haken
+    tournament.py      Reihenfolge, Punktevergabe, Rangliste
+    quiz.py            gemeinsame Basis der Multiple-Choice-Spiele
+    ui.py              dunkle Party-Optik (Tastenkappen, Rangliste, Banner)
+    registry.py        Liste aller Minispiele
+    games/             reflex.py, quizzes.py, aim.py, curve_game.py
   scenes/              menu, lobby, settings_scene, controls, game, scoreboard,
-                       join (+ Client-Lobby), client_game, arena_render
+                       join (+ Client-Lobby), client_game, arena_render,
+                       tournament (Turnier-Ablauf)
   ui/widgets.py        handgemachte Widgets (Button, Slider, Zahlenfeld, ...)
 tools/make_assets.py   erzeugt Soundeffekte + Icon prozedural
 ```

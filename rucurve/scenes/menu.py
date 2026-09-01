@@ -10,7 +10,7 @@ from .common import BaseMenuScene
 
 class MenuScene(BaseMenuScene):
     title = "Ru-Curve"
-    subtitle = "Achtung die Kurve - lokal an einem PC oder zusammen im LAN"
+    subtitle = "Turnier mit 11 Minispielen - lokal an einem PC oder zusammen im LAN"
 
     def on_enter(self) -> None:
         self.app.audio.music("menu")
@@ -72,7 +72,7 @@ class MenuScene(BaseMenuScene):
         draw_text(
             surf,
             self.app.fonts.body(14),
-            f"v{rucurve.__version__}   -   Lenken mit zwei benachbarten Tasten, dritte Taste = Powerup",
+            f"v{rucurve.__version__}   -   Jeder Spieler hat drei Tasten: links, Aktion, rechts",
             T.TEXT_MUTED,
             (w // 2, h - 40),
             center=True,

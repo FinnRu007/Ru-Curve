@@ -122,7 +122,10 @@ class LobbyScene(BaseMenuScene):
         self.widgets.append(Button((area_x + 294, by, 150, 42), "Einstellungen", self._settings, "ghost"))
         self.widgets.append(Button((area_x + 456, by, 130, 42), "Steuerung", self._controls, "ghost"))
 
-        self.widgets.append(Button((w - 220, h - 78, 172, 50), "Start", self._start, "primary"))
+        self.widgets.append(Button((w - 220, h - 78, 172, 50), "Kurve starten",
+                                   self._start, "ghost"))
+        self.widgets.append(Button((w - 410, h - 78, 182, 50), "TURNIER",
+                                   self._start_tournament, "primary"))
         self.widgets.append(Button((w - 220, by, 172, 40), "Zurueck", self._back, "ghost"))
 
     def _build_row(self, x, y, w, p: PlayerDef) -> None:
@@ -247,6 +250,42 @@ class LobbyScene(BaseMenuScene):
 
         self.app.audio.play("click")
         self.app.set_scene(GameScene(self.app, session))
+
+    def _start_tournament(self) -> None:
+        """Baut das Turnier, verteilt Reihenfolge + Spieler und startet es."""
+        import random as _r
+
+        from ..party.base import PartyPlayer
+        from ..party.tournament import Tournament
+        from .tournament import TournamentScene
+
+        if not self.players:
+            return
+        for i, p in enumerate(self.players):
+            p.pid = i
+        self.app.config.save()
+        st = self.app.config.settings
+        order = Tournament.build_order(_r.Random(), st.enabled_party_games(),
+                                       st.party_games, st.party_shuffle)
+        party = [
+            PartyPlayer(pid=p.pid, name=p.name, color=color_for(p.color_index),
+                        color_index=p.color_index, is_local=(p.client_id < 0),
+                        is_bot=p.is_bot, slot_index=p.slot_index,
+                        client_id=p.client_id, difficulty=st.bot_difficulty)
+            for p in self.players
+        ]
+        if self.host:
+            self.host.broadcast({
+                "type": "pt_begin",
+                "players": [p.to_wire() for p in party],
+                "order": order,
+                "points_top": st.party_points_top,
+                "settings": asdict(st),
+            })
+        self.app.audio.play("click")
+        self.app.set_scene(TournamentScene(
+            self.app, party, host=self.host, beacon=self.beacon,
+            order=order, points_top=st.party_points_top))
 
     # ------------------------------------------------------------------ #
     #  Netzwerk (Host)

@@ -109,6 +109,12 @@ class GameSettings:
     arena_width: int = 1500      # zur Laufzeit aus arena_size + Fenster berechnet
     arena_height: int = 900
 
+    # Turnier (Minispiel-Modus)
+    party_games: int = 8             # wie viele Minispiele pro Turnier
+    party_points_top: int = 10       # Punkte fuer Platz 1 eines Minispiels
+    party_shuffle: bool = True       # Reihenfolge mischen
+    party_enabled: dict = field(default_factory=dict)   # gid -> bool
+
     # Bots
     bot_count: int = 0
     bot_difficulty: float = 0.5      # 0 (leicht) .. 1 (stark)
@@ -141,6 +147,15 @@ class GameSettings:
             self.powerups[pid] = cfg
         return cfg
 
+    def party_game_enabled(self, gid: str) -> bool:
+        return bool(self.party_enabled.get(gid, True))
+
+    def enabled_party_games(self) -> list[str]:
+        from .party.registry import GAME_IDS
+
+        out = [g for g in GAME_IDS if self.party_game_enabled(g)]
+        return out or list(GAME_IDS)
+
     def enabled_powerups(self) -> list[str]:
         out = [p["id"] for p in POWERUPS if self.powerup_cfg(p["id"]).enabled]
         return out or [DEFAULT_POWERUP]
@@ -172,6 +187,8 @@ class GameSettings:
         c.arena_size = int(_clamp(c.arena_size, 550, 1800))
         c.arena_width = int(_clamp(c.arena_width, 600, 4000))
         c.arena_height = int(_clamp(c.arena_height, 400, 4000))
+        c.party_games = int(_clamp(c.party_games, 1, 40))
+        c.party_points_top = int(_clamp(c.party_points_top, 2, 50))
         c.bot_count = int(_clamp(c.bot_count, 0, 11))
         c.bot_difficulty = _clamp(c.bot_difficulty, 0.0, 1.0)
         c.sound_volume = _clamp(c.sound_volume, 0.0, 1.0)
@@ -288,4 +305,6 @@ def settings_from_dict(data: dict) -> GameSettings:
         if "powerup_boost_factor" in data and "speed" in pus:
             pus["speed"].strength = float(data["powerup_boost_factor"])
     s.powerups = pus
+    raw_party = data.get("party_enabled")
+    s.party_enabled = {str(k): bool(v) for k, v in raw_party.items()}         if isinstance(raw_party, dict) else {}
     return s

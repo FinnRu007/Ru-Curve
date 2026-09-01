@@ -14,6 +14,7 @@ import pygame
 from .. import theme as T
 from ..config import GameSettings, default_powerups
 from ..game.powerups import POWERUPS
+from ..party.registry import ALL_GAMES
 from ..ui.widgets import (
     Button,
     NumberField,
@@ -55,6 +56,11 @@ SECTIONS: list[tuple[str, str, list]] = [
         ("num", "countdown_seconds", "Countdown", 0.0, 10, 0.5, 1, " s"),
         ("num", "round_time_limit", "Zeitlimit (0 = keins)", 0.0, 600, 10, 0, " s"),
         ("bool", "self_collision", "Eigene Linie toedlich"),
+    ]),
+    ("turnier", "Turnier", [
+        ("num", "party_games", "Anzahl Minispiele", 1, 40, 1, 0, ""),
+        ("num", "party_points_top", "Punkte fuer Platz 1", 2, 50, 1, 0, ""),
+        ("bool", "party_shuffle", "Reihenfolge mischen"),
     ]),
     ("bots", "Bots", [
         ("num", "bot_count", "Anzahl beim Start", 0, 11, 1, 0, ""),
@@ -127,6 +133,8 @@ class SettingsScene(BaseMenuScene):
             else:
                 for row in rows:
                     y = self._build_row(panel, area, y, row)
+                if sid == "turnier":
+                    y = self._build_party_games(panel, area, y)
             y += 12
 
         panel.content_height = y + 10
@@ -150,6 +158,41 @@ class SettingsScene(BaseMenuScene):
         _, attr, label, lo, hi, step, dec, suffix = row
         self._add_num(panel, area, y, self.s, attr, label, lo, hi, step, dec, suffix, indent=34)
         return y + ROW_H
+
+    def _build_party_games(self, panel, area, y) -> int:
+        """An/Aus-Schalter fuer jedes einzelne Minispiel."""
+        panel.add(_SubHead((area.x + 22, area.y + y, area.w - 60, SUB_H),
+                           "Welche Minispiele sollen vorkommen?"))
+        y += SUB_H
+        panel.add(Button((area.x + 34, area.y + y, 120, 34), "Alle an",
+                         lambda: self._all_party(True), "ghost"))
+        panel.add(Button((area.x + 166, area.y + y, 120, 34), "Alle aus",
+                         lambda: self._all_party(False), "ghost"))
+        y += 46
+        for cls in ALL_GAMES:
+            gid = cls.id
+            panel.add(_Desc((area.x + 56, area.y + y + 1, 420, 24), cls.name,
+                            size=17, color=T.TEXT, bold=True))
+            panel.add(_Desc((area.x + 56, area.y + y + 24, area.w - 180, 24), cls.rules))
+            tg = Toggle((area.x + area.w - 96, area.y + y + 8),
+                        self.s.party_game_enabled(gid), None)
+            tg.on_change = lambda v, g=gid: self._set_party(g, v)
+            panel.add(tg)
+            y += ROW_H
+        return y
+
+    def _set_party(self, gid, on):
+        self.s.party_enabled[gid] = bool(on)
+        if not any(self.s.party_enabled.get(c.id, True) for c in ALL_GAMES):
+            self.s.party_enabled[ALL_GAMES[0].id] = True     # mind. eines an
+            self._rebuild_keep_scroll()
+
+    def _all_party(self, on):
+        for cls in ALL_GAMES:
+            self.s.party_enabled[cls.id] = on
+        if not on:
+            self.s.party_enabled[ALL_GAMES[0].id] = True
+        self._rebuild_keep_scroll()
 
     def _build_powerups(self, panel, area, y) -> int:
         panel.add(Button((area.x + 34, area.y + y, 120, 34), "Alle an",
@@ -245,6 +288,7 @@ class SettingsScene(BaseMenuScene):
                 continue
             setattr(self.s, f.name, getattr(defaults, f.name))
         self.s.powerups = default_powerups()
+        self.s.party_enabled = {}
         self._rebuild_keep_scroll()
 
     def _done(self) -> None:
@@ -376,9 +420,12 @@ class _RowLabel:
 
 
 class _Desc:
-    def __init__(self, rect, text):
+    def __init__(self, rect, text, size=14, color=None, bold=False):
         self.rect = pygame.Rect(rect)
         self.text = text
+        self.size = size
+        self.color = color or T.TEXT_MUTED
+        self.bold = bold
 
     def handle_event(self, e):
         return False
@@ -387,4 +434,5 @@ class _Desc:
         pass
 
     def draw(self, surf, fonts):
-        draw_text(surf, fonts.body(14), self.text, T.TEXT_MUTED, (self.rect.x, self.rect.y + 4))
+        font = fonts.body_bold(self.size) if self.bold else fonts.body(self.size)
+        draw_text(surf, font, self.text, self.color, (self.rect.x, self.rect.y + 4))

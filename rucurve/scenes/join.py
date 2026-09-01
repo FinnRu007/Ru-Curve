@@ -230,6 +230,17 @@ class ClientLobbyScene(BaseMenuScene):
 
                 self.app.set_scene(ClientGameScene(self.app, self.client, msg, self.cid))
                 return
+            elif t == "pt_begin":
+                from ..party.base import PartyPlayer
+                from .tournament import TournamentScene
+
+                party = [PartyPlayer.from_wire(d, self.cid)
+                         for d in msg.get("players", [])]
+                self.app.set_scene(TournamentScene(
+                    self.app, party, client=self.client, cid=self.cid,
+                    order=msg.get("order") or [],
+                    points_top=int(msg.get("points_top", 10))))
+                return
             elif t == "__disconnect__":
                 self.status = "Verbindung zum Host verloren."
                 self.client.close()

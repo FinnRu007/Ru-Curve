@@ -99,12 +99,14 @@ def _glow_mask(r: int) -> pygame.Surface:
 
 
 class ArenaView:
-    def __init__(self, settings, screen_size: tuple[int, int], n_players: int = 1) -> None:
+    def __init__(self, settings, screen_size: tuple[int, int], n_players: int = 1,
+                 hud: bool = True) -> None:
         self.aw = settings.arena_width
         self.ah = settings.arena_height
         self.n_players = max(1, n_players)
+        self.hud = hud
         sw, sh = screen_size
-        self.top = hud_height(sw, self.n_players)
+        self.top = hud_height(sw, self.n_players) if hud else 8
         avail_w = max(200, sw - 2 * _PAD)
         avail_h = max(160, sh - self.top - 2 * _PAD)
         self.scale = min(avail_w / self.aw, avail_h / self.ah)
@@ -162,11 +164,13 @@ class ArenaView:
     # ------------------------------------------------------------------ #
     def draw(self, target, render_curves: list[dict], fonts, *, countdown=0.0,
              round_no=1, phase="running", banner: str | None = None,
-             inverted: bool = False, fog: float = 0.0, hint: str | None = None) -> None:
-        target.fill(T.BG)
+             inverted: bool = False, fog: float = 0.0, hint: str | None = None,
+             bg=None) -> None:
+        target.fill(bg if bg is not None else T.BG)
 
-        shadow = pygame.Rect(self.ox - 6, self.oy - 4, self.view_w + 12, self.view_h + 16)
-        pygame.draw.rect(target, (231, 233, 240), shadow, border_radius=16)
+        if bg is None:
+            shadow = pygame.Rect(self.ox - 6, self.oy - 4, self.view_w + 12, self.view_h + 16)
+            pygame.draw.rect(target, (231, 233, 240), shadow, border_radius=16)
         frame = pygame.Rect(self.ox - 3, self.oy - 3, self.view_w + 6, self.view_h + 6)
         pygame.draw.rect(target, T.ARENA_BORDER, frame, border_radius=9)
         target.blit(self.surf, (self.ox, self.oy))
@@ -207,7 +211,8 @@ class ArenaView:
         if fog > 0:
             self._draw_fog(target, render_curves, fog)
 
-        self._draw_hud(target, render_curves, fonts, round_no)
+        if self.hud:
+            self._draw_hud(target, render_curves, fonts, round_no)
 
         if phase == "countdown":
             self._countdown(target, fonts, countdown)

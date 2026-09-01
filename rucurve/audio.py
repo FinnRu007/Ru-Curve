@@ -9,7 +9,8 @@ import pygame
 
 from . import theme as T
 
-_SFX = ("crash", "powerup", "countdown", "go", "click", "win")
+_SFX = ("crash", "powerup", "countdown", "go", "click", "win",
+        "fanfare", "whistle", "tick", "correct", "wrong", "applause")
 
 
 class Audio:

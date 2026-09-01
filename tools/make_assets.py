@@ -105,6 +105,86 @@ def sfx_win():
 
 
 # --------------------------------------------------------------------------- #
+#  Turnier-Sounds
+# --------------------------------------------------------------------------- #
+def _brass(freq, dur, detune=0.004):
+    """Trompeten-artiger Ton: Saegezahn-Obertoene + leichtes Vibrato."""
+    t = np.linspace(0, dur, int(SR * dur), endpoint=False)
+    vib = 1.0 + 0.006 * np.sin(2 * np.pi * 5.5 * t)
+    out = np.zeros_like(t)
+    for k, amp in enumerate((1.0, 0.62, 0.42, 0.26, 0.16, 0.09), start=1):
+        out += amp * np.sin(2 * np.pi * freq * k * vib * t)
+        out += amp * 0.5 * np.sin(2 * np.pi * freq * k * (1 + detune) * t)
+    out /= np.max(np.abs(out)) + 1e-9
+    # weicher Anblas-Einsatz
+    att = int(SR * min(0.05, dur * 0.25))
+    env = np.ones_like(t)
+    env[:att] = np.linspace(0, 1, att) ** 0.6
+    rel = int(SR * min(0.18, dur * 0.5))
+    env[-rel:] *= np.linspace(1, 0, rel) ** 1.4
+    return out * env
+
+
+def sfx_fanfare():
+    """Kurze Trompeten-Fanfare fuer Ergebnisse und den Turniersieg."""
+    g, c, e = 392.00, 523.25, 659.25
+    parts = [
+        _brass(g, 0.15), _brass(g, 0.13), _brass(g, 0.13),
+        _brass(c, 0.30), _brass(e, 0.22), _brass(c * 1.5, 0.60),
+    ]
+    m = np.concatenate(parts) * 0.40
+    _write_wav(os.path.join(SND, "fanfare.wav"), _stereo(m))
+
+
+def sfx_whistle():
+    """Anpfiff - kurzer Triller."""
+    dur = 0.55
+    t = np.linspace(0, dur, int(SR * dur), endpoint=False)
+    trill = 2100 + 120 * np.sin(2 * np.pi * 22 * t)
+    m = np.sin(2 * np.pi * trill * t) + 0.35 * np.sin(2 * np.pi * 2 * trill * t)
+    rng = np.random.default_rng(3)
+    m += 0.10 * rng.uniform(-1, 1, len(t))
+    m *= _env(len(t), 0.02, 0.16) * 0.30
+    _write_wav(os.path.join(SND, "whistle.wav"), _stereo(m))
+
+
+def sfx_tick():
+    m = _tone(1750, 0.035, "square") * _env(int(SR * 0.035), 0.001, 0.03) * 0.16
+    _write_wav(os.path.join(SND, "tick.wav"), _stereo(m))
+
+
+def sfx_correct():
+    parts = [_tone(880, 0.09), _tone(1318.5, 0.16)]
+    m = np.concatenate([p * _env(len(p), 0.004, len(p) / SR * 0.7) for p in parts]) * 0.32
+    _write_wav(os.path.join(SND, "correct.wav"), _stereo(m))
+
+
+def sfx_wrong():
+    m = _tone(196, 0.24, "square") * _env(int(SR * 0.24), 0.004, 0.2) * 0.26
+    _write_wav(os.path.join(SND, "wrong.wav"), _stereo(m))
+
+
+def sfx_applause():
+    """Applaus: gefilterte Rauschstoesse."""
+    dur = 1.8
+    n = int(SR * dur)
+    rng = np.random.default_rng(11)
+    noise = rng.uniform(-1, 1, n)
+    for _ in range(2):
+        noise = np.convolve(noise, np.ones(4) / 4, mode="same")
+    claps = np.zeros(n)
+    pos = 0
+    while pos < n:
+        w = rng.integers(200, 900)
+        end = min(n, pos + w)
+        claps[pos:end] += noise[pos:end] * rng.uniform(0.4, 1.0)
+        pos += int(rng.integers(300, 1400))
+    swell = np.minimum(1.0, np.linspace(0, 3, n)) * np.linspace(1, 0.2, n)
+    m = claps * swell * 0.30
+    _write_wav(os.path.join(SND, "applause.wav"), _stereo(m))
+
+
+# --------------------------------------------------------------------------- #
 def _unused_music_menu():
     dur = 8.0
     t = np.linspace(0, dur, int(SR * dur), endpoint=False)
@@ -201,7 +281,9 @@ def make_icon():
 
 def main():
     print("Sounds:")
-    for fn in (sfx_click, sfx_countdown, sfx_go, sfx_powerup, sfx_crash, sfx_win):
+    for fn in (sfx_click, sfx_countdown, sfx_go, sfx_powerup, sfx_crash, sfx_win,
+               sfx_fanfare, sfx_whistle, sfx_tick, sfx_correct, sfx_wrong,
+               sfx_applause):
         fn()
     print("Icon:")
     make_icon()

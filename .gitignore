@@ -6,4 +6,6 @@ dist/
 .venv/
 venv/
 tests/_shots/
+tests/_shots_party/
+tests/_tmp/
 config.json
