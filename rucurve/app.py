@@ -44,6 +44,12 @@ class App:
         self.running = True
         self.scene: Scene | None = None
         self._pending_scene: Scene | None = None
+        # Schaut im Hintergrund, ob es auf der Ru-Services-Seite eine
+        # neuere Version gibt (blockiert nie den Start).
+        from .net.internet import UpdateCheck
+
+        self.update_check = UpdateCheck()
+        self.update_check.start()
 
     # ------------------------------------------------------------------ #
     def _desktop_size(self) -> tuple[int, int]:
@@ -103,10 +109,11 @@ class App:
         self.config.save()
 
     # ------------------------------------------------------------------ #
-    def run(self) -> None:
+    def run(self, splash: bool = True) -> None:
         from .scenes.menu import MenuScene
+        from .scenes.splash import SplashScene
 
-        self.set_scene(MenuScene(self))
+        self.set_scene(SplashScene(self) if splash else MenuScene(self))
         self._swap_scene()
 
         while self.running:

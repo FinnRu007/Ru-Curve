@@ -1,8 +1,11 @@
 # Ru-Curve
 
-Ein Partyspiel-Turnier fuer viele Leute an einem PC oder ueber LAN: **elf kurze
-Minispiele** laufen hintereinander ab, nach jedem gibt es Punkte nach Platzierung,
-und eine Rangliste zeigt jederzeit, wer vorn liegt. Eines der Minispiele ist
+Ein Partyspiel-Turnier fuer viele Leute an einem PC, ueber LAN oder **uebers
+Internet**: **elf kurze Minispiele** laufen hintereinander ab, nach jedem gibt es
+Punkte nach Platzierung, und eine Rangliste zeigt jederzeit, wer vorn liegt. Alle
+spielen dabei gleichzeitig gegeneinander, und **Tempo entscheidet** - bei den
+Quizspielen bringt eine schnelle richtige Antwort deutlich mehr als eine spaete.
+Jedes Minispiel laesst sich auch **einzeln starten** (Lobby -> *Einzelnes Spiel*). Eines der Minispiele ist
 **Achtung die Kurve** - das Spiel, aus dem das Projekt entstanden ist; es laesst
 sich auch weiterhin allein als klassisches Match spielen.
 
@@ -74,6 +77,40 @@ Ist der Standard-Port belegt, weicht der Host automatisch auf den nächsten
 freien aus (51738 … 51745) und zeigt ihn an — deshalb immer die Adresse aus der
 Lobby verwenden statt sie zu raten.
 
+## Uebers Internet spielen
+
+Beim *Uber LAN hosten* versucht das Spiel automatisch, den Port im Router zu
+oeffnen (UPnP), und zeigt in der Lobby **zwei** Adressen an:
+
+* **Im gleichen WLAN:** die lokale Adresse, z. B. `192.168.178.47:51738`
+* **Uebers Internet:** die oeffentliche Adresse, z. B. `80.133.22.100:51738`
+
+Freunde ausserhalb geben die zweite Adresse unter *Uber LAN beitreten* ein.
+Steht dort **"Port pruefen!"**, hat der Router die selbsttaetige Freigabe
+abgelehnt - das ist der Normalfall bei einer FritzBox ab Werk:
+
+1. **FritzBox:** `Internet > Freigaben > Portfreigaben > Geraet fuer Freigaben`
+   den Host-PC waehlen und **"Selbststaendige Portfreigaben fuer dieses Geraet
+   erlauben"** anhaken. Danach das Hosten neu starten.
+2. **Von Hand,** wenn UPnP nicht gewuenscht ist: eine Portfreigabe
+   **TCP 51738 -> Host-PC, Port 51738** anlegen.
+
+Zwei Dinge, die haeufig schiefgehen:
+
+* Manche Anschluesse haben **kein eigenes IPv4** mehr (DS-Lite / CGNAT, oft bei
+  Kabel- und Mobilfunkanschluessen). Dann hilft keine Portfreigabe; in dem Fall
+  ueber ein VPN wie Radmin/Hamachi/Tailscale spielen - darin verhalten sich alle
+  PCs wie im selben LAN, und die LAN-Anleitung gilt unveraendert.
+* Die **Windows-Firewall** muss das Spiel trotzdem durchlassen, siehe oben.
+
+## Neue Version
+
+Beim Start schaut das Programm im Hintergrund auf
+`finnru007.github.io/Ru-Services/version.json`, ob es eine neuere Fassung gibt.
+Wenn ja, erscheint im Hauptmenue ein Band **"Neue Version x.y.z verfuegbar"** -
+ein Klick darauf oeffnet die Download-Seite. Ohne Internet passiert nichts, der
+Start verzoegert sich dadurch nicht.
+
 ## Das Turnier
 
 Der Host legt fest, wie viele Minispiele gespielt werden (Standard 8) und welche
@@ -94,13 +131,22 @@ mit.
 | 7 | **Haemmern** | Acht Sekunden lang so schnell wie moeglich auf die Tasten hauen. |
 | 8 | **Stopp!** | Einen hin- und herlaufenden Zeiger moeglichst genau in der Mitte anhalten. |
 | 9 | **Zeitgefuehl** | Druecken, wenn genau die geforderte Zeit vorbei ist - die Uhr verschwindet unterwegs. |
-| 10 | **Zielen** | Maus-Spiel: Ziele anklicken. Sitzen mehrere an einem PC, ist jeder einzeln dran. |
+| 10 | **Ru-Rennen** | Autorennen ueber zwei Runden: links/rechts lenken, Aktionstaste gibt Schub. Alle fahren gleichzeitig, Rempler kosten Tempo. |
 | 11 | **Achtung die Kurve** | Eine kurze Runde des Originalspiels - wer am laengsten ueberlebt, gewinnt. |
 
 Wie das ueber LAN zusammenlaeuft: der Host wuerfelt die Aufgaben aus und schickt
 sie an alle, jede Maschine spielt ihre eigenen Leute und meldet das Ergebnis
-zurueck, der Host vergibt die Punkte. Bei Achtung die Kurve rechnet der Host die
-komplette Runde und schickt Schnappschuesse - dort ist er die einzige Wahrheit.
+zurueck, der Host vergibt die Punkte. Bei **Achtung die Kurve** und beim
+**Ru-Rennen** rechnet der Host die komplette Runde und schickt Schnappschuesse -
+dort ist er die einzige Wahrheit, damit Zusammenstoesse ueberall gleich ausgehen.
+
+### Punkte bei den Quizspielen
+
+Eine richtige Antwort ist nicht einfach ein Punkt, sondern zwischen **100**
+(sofort) und **55** (kurz vor Ablauf der 5 Sekunden). Wer gleich viele Aufgaben
+richtig hat, aber schneller war, gewinnt damit klar. Falsche Antworten bringen
+nichts. Die Untergrenze liegt bewusst ueber der Haelfte: sonst waere eine
+einzige blitzschnelle Antwort mehr wert als zwei richtige.
 
 ## Steuerung
 
@@ -178,6 +224,8 @@ python tests/test_party.py       # ein komplettes Turnier durch alle 11 Minispie
 python tests/test_party_net.py   # Turnier ueber echte Sockets (Host + Client)
 python tests/test_lan_robust.py  # belegte Ports, Fehlermeldungen, Hostsuche
 python tests/test_party_join.py  # Lobby -> TURNIER: Mitspieler kommt wirklich mit
+python tests/test_race.py        # Ru-Rennen: Strecke, Rundenzaehlung, Bots, Rempler
+python tests/test_speed_and_updates.py  # Tempo-Wertung, Update-Hinweis, Startanimation
 python tests/shots.py            # rendert alle Szenen als PNG nach tests/_shots/
 python tests/shots_party.py      # rendert jedes Minispiel nach tests/_shots_party/
 ```
@@ -193,15 +241,18 @@ rucurve/
   theme.py  colors.py
   audio.py             nur Soundeffekte (Musik deaktiviert)
   game/                world.py (Simulation), curve.py, collision.py, powerups.py, bots.py
-  net/                 protocol.py, host.py, client.py, discovery.py
+  net/                 protocol.py, host.py, client.py, discovery.py, errors.py,
+                       upnp.py (Portfreigabe im Router), internet.py (oeffentliche
+                       IP + Update-Pruefung)
   party/               Turnier-Modus
     base.py            MiniGame-Basis, Spieler, Ergebnisse, Netz-Haken
     tournament.py      Reihenfolge, Punktevergabe, Rangliste
     quiz.py            gemeinsame Basis der Multiple-Choice-Spiele
     ui.py              dunkle Party-Optik (Tastenkappen, Rangliste, Banner)
     registry.py        Liste aller Minispiele
-    games/             reflex.py, quizzes.py, aim.py, curve_game.py
-  scenes/              menu, lobby, settings_scene, controls, game, scoreboard,
+    games/             reflex.py, quizzes.py, race.py, curve_game.py
+  scenes/              splash (Ru-Services-Startanimation), menu, lobby,
+                       settings_scene, controls, game, scoreboard,
                        join (+ Client-Lobby), client_game, arena_render,
                        tournament (Turnier-Ablauf)
   ui/widgets.py        handgemachte Widgets (Button, Slider, Zahlenfeld, ...)

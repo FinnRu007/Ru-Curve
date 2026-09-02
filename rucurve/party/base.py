@@ -171,9 +171,21 @@ class MiniGame:
     def results(self) -> dict[int, Result]:
         return self.results_map
 
+    live_unit = ""               # Einheit hinter dem Live-Wert, z.B. " Pkt"
+
     def live_rows(self) -> dict[int, float]:
         """Zwischenstand fuer die Live-Rangliste (Rohwert je Spieler)."""
         return {pid: r.raw for pid, r in self.results_map.items()}
+
+    @classmethod
+    def live_label(cls, value) -> str:
+        """Live-Wert lesbar machen - ganze Zahlen ohne ".0"."""
+        try:
+            v = float(value)
+        except (TypeError, ValueError):
+            return str(value)
+        text = "%d" % round(v) if abs(v - round(v)) < 0.05 else "%.1f" % v
+        return text + cls.live_unit
 
     # -- Hilfen fuer Unterklassen --------------------------------------
     def button_of(self, pid: int, key: int) -> int | None:

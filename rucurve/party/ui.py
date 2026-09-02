@@ -164,7 +164,10 @@ def leaderboard(surf, fonts, rect, rows, heading="Rangliste", compact=False):
         draw_text(surf, fonts.body_bold(15),
                   fit(fonts.body_bold(15), r.get("name", "?"), box.w - 120),
                   TEXT, (box.x + 58, box.centery - 9))
-        val = str(r.get("points", r.get("value", "")))
+        # "value" ist der laufende Stand im Minispiel und hat Vorrang -
+        # "points" (Turniergesamt) ist waehrenddessen die uninteressantere Zahl.
+        val = r.get("value")
+        val = str(val if val is not None else r.get("points", ""))
         img = fonts.display(17).render(val, True, TEXT)
         surf.blit(img, img.get_rect(midright=(box.right - 12, box.centery)))
         delta = r.get("delta")

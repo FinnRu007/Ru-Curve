@@ -140,8 +140,41 @@ def test_lan_curve_round_is_host_authoritative():
     rec = hs.tour.history[0]
     assert rec.game_id == "curve"
     assert all(r["done"] for r in rec.rows), "Host muss fuer alle werten"
-    assert len({r["place"] for r in rec.rows}) >= 2, "es muss Plaetze geben"
+    # Ohne Tastendruecke koennen alle gleichzeitig sterben - das ist ein
+    # echter Gleichstand. Verlangt wird nur: laenger ueberlebt = besserer Platz.
+    for a in rec.rows:
+        for b in rec.rows:
+            if a["raw"] > b["raw"]:
+                assert a["place"] < b["place"], (
+                    "%.2f s bekam Platz %d, %.2f s aber Platz %d"
+                    % (a["raw"], a["place"], b["raw"], b["place"]))
     # Der Client hat Schnappschuesse bekommen und Zeit mitgezaehlt
+    assert cs.tour.totals == hs.tour.totals
+
+
+def test_lan_race_is_host_authoritative():
+    """Beim Rennen rechnet der Host - der Client fahert trotzdem richtig mit."""
+    hs, cs = run_lan(["race"], max_seconds=180)
+    assert hs.phase == "over"
+    rec = hs.tour.history[0]
+    assert rec.game_id == "race"
+    assert all(r["done"] for r in rec.rows), "Host muss fuer alle werten"
+    assert len({r["place"] for r in rec.rows}) >= 2, "es muss Plaetze geben"
+    assert cs.tour.totals == hs.tour.totals
+
+    # Der Client hat die Autos bewegt gesehen, nicht nur die Startaufstellung
+    cars = getattr(cs.game, "cars", {})
+    assert cars, "Client hat gar kein Rennen aufgebaut"
+    assert max(c["prog"] for c in cars.values()) > 0.5, (
+        "beim Client sind die Autos nicht gefahren")
+
+
+def test_single_game_ends_the_tournament():
+    """'Einzelnes Spiel' laeuft ueber dieselbe Turnierlogik - genau eine Runde."""
+    hs, cs = run_lan(["reaction"])
+    assert hs.phase == "over"
+    assert len(hs.tour.history) == 1
+    assert hs.tour.history[0].game_id == "reaction"
     assert cs.tour.totals == hs.tour.totals
 
 

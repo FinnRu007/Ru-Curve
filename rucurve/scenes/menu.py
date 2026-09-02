@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import rucurve
 from .. import theme as T
-from ..ui.widgets import Button, draw_text
+import pygame
+
+from ..ui.widgets import Button, draw_text, wrap_text
 from .common import BaseMenuScene
 
 
@@ -35,8 +37,26 @@ class MenuScene(BaseMenuScene):
         add("Einstellungen", self._settings, "ghost")
         add("Steuerung", self._controls, "ghost")
         add("Beenden", self._quit, "ghost")
+        # Update-Band ueber die Knoepfe - der Streifen unter der Kopfzeile ist
+        # ohnehin frei, unten wuerde es bei kleinen Fenstern kollidieren.
+        self._update_rect = pygame.Rect(w // 2 - 260, 138, 520, 44)
 
     # ------------------------------------------------------------------ #
+    def handle_events(self, events) -> None:
+        chk = getattr(self.app, "update_check", None)
+        box = getattr(self, "_update_rect", None)
+        if chk is not None and chk.available and box is not None:
+            for e in events:
+                if e.type == pygame.MOUSEBUTTONDOWN and e.button == 1                         and box.collidepoint(e.pos):
+                    import webbrowser
+
+                    try:
+                        webbrowser.open(chk.page)
+                    except Exception:
+                        pass
+                    return
+        super().handle_events(events)
+
     def _local(self) -> None:
         from .lobby import LobbyScene
 
@@ -66,6 +86,22 @@ class MenuScene(BaseMenuScene):
         self.app.running = False
 
     # ------------------------------------------------------------------ #
+    def _draw_update_hint(self, surf) -> None:
+        """Band mit Hinweis, wenn auf der Ru-Services-Seite etwas Neues liegt."""
+        chk = getattr(self.app, "update_check", None)
+        if chk is None or not chk.available:
+            return
+        box = getattr(self, "_update_rect", None)
+        if box is None:
+            return
+        fonts = self.app.fonts
+        pygame.draw.rect(surf, T.ACCENT_SOFT, box, border_radius=T.R_PILL)
+        pygame.draw.rect(surf, T.ACCENT, box, width=2, border_radius=T.R_PILL)
+        text = "Neue Version %s verfuegbar - hier klicken zum Herunterladen" % chk.latest
+        draw_text(surf, fonts.body_bold(15), text, T.ACCENT_DARK,
+                  box.center, center=True)
+
+    # ------------------------------------------------------------------ #
     def draw(self, surf) -> None:
         super().draw(surf)
         w, h = self.size
@@ -77,3 +113,4 @@ class MenuScene(BaseMenuScene):
             (w // 2, h - 40),
             center=True,
         )
+        self._draw_update_hint(surf)

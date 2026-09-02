@@ -29,6 +29,7 @@ class CurveGame(MiniGame):
     rules = "Lenke mit links und rechts, weiche allen Linien aus. Wer am laengsten lebt, gewinnt."
     input_mode = "curve"
     scoring = "high"                 # ueberlebte Sekunden
+    live_unit = " s"
     authoritative = True
     intro_seconds = 4.0
     max_seconds = 95.0

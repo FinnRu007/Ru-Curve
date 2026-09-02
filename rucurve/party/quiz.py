@@ -2,8 +2,12 @@
 
 Jede Frage hat genau DREI Antworten - passend zu den drei Tasten jedes Spielers
 (Links / Aktion / Rechts). Jede Frage laeuft feste `per_question` Sekunden, auf
-jeder Maschine exakt gleich lang; wer frueher antwortet, sammelt Zeitvorteil
-fuer den Gleichstand.
+jeder Maschine exakt gleich lang.
+
+**Tempo zaehlt.** Eine richtige Antwort bringt nicht einfach einen Punkt,
+sondern zwischen MAX_POINTS (sofort) und MIN_POINTS (kurz vor Ablauf) - wer
+schneller ist, gewinnt also auch bei gleich vielen richtigen Antworten klar.
+Eine falsche Antwort bringt nichts und laesst sich nicht korrigieren.
 """
 
 from __future__ import annotations
@@ -22,6 +26,11 @@ class QuizGame(MiniGame):
     scoring = "high"
     per_question = 5.0
     n_questions = 10
+    live_unit = " Pkt"
+    MAX_POINTS = 100     # sofort geantwortet
+    # Muss ueber der Haelfte von MAX_POINTS liegen: sonst waere eine einzige
+    # blitzschnelle Antwort mehr wert als zwei richtige, nur langsame.
+    MIN_POINTS = 55      # in letzter Sekunde geantwortet
 
     # -- von Unterklassen zu fuellen ------------------------------------
     @staticmethod
@@ -52,6 +61,8 @@ class QuizGame(MiniGame):
         self.q_time = 0.0
         self.answers: dict[int, int] = {}
         self.correct: dict[int, int] = {pid: 0 for pid in ctx.local_pids}
+        self.points: dict[int, float] = {pid: 0.0 for pid in ctx.local_pids}
+        self.gained: dict[int, int] = {}      # Punkte der letzten Antwort (Anzeige)
         self.spent: dict[int, float] = {pid: 0.0 for pid in ctx.local_pids}
         self.flash: dict[int, list] = {}
         self._bot_plan = self._plan_bots()
@@ -97,6 +108,11 @@ class QuizGame(MiniGame):
                 if pid not in self.answers:
                     self._answer(pid, btn)
 
+    def speed_points(self, t: float) -> int:
+        """Punkte fuer eine richtige Antwort nach t Sekunden."""
+        k = max(0.0, min(1.0, t / max(0.01, self.per_q)))
+        return int(round(self.MAX_POINTS - (self.MAX_POINTS - self.MIN_POINTS) * k))
+
     def _answer(self, pid, btn):
         q = self.question
         if q is None:
@@ -104,8 +120,11 @@ class QuizGame(MiniGame):
         self.answers[pid] = btn
         self.spent[pid] = self.spent.get(pid, 0.0) + self.q_time
         hit = btn == q["correct"]
+        gain = self.speed_points(self.q_time) if hit else 0
         if hit:
             self.correct[pid] = self.correct.get(pid, 0) + 1
+            self.points[pid] = self.points.get(pid, 0.0) + gain
+        self.gained[pid] = gain
         self.flash[pid] = [U.OK if hit else U.BAD, 0.45]
         p = self.ctx.player(pid)
         if p is not None and not p.is_bot:
@@ -127,6 +146,7 @@ class QuizGame(MiniGame):
                 if pid not in self.answers:
                     self.spent[pid] = self.spent.get(pid, 0.0) + self.per_q
             self.answers.clear()
+            self.gained.clear()
             self.q_index += 1
             self.q_time = 0.0
             if self.q_index >= len(self.questions):
@@ -135,13 +155,14 @@ class QuizGame(MiniGame):
     def finish(self):
         for pid in self.ctx.local_pids:
             r = self.results_map[pid]
-            r.raw = self.correct.get(pid, 0)
+            r.raw = round(self.points.get(pid, 0.0), 1)
             r.time = round(self.spent.get(pid, 0.0), 3)
-            r.detail = "%d/%d" % (r.raw, len(self.questions))
+            r.detail = "%d Pkt - %d/%d richtig" % (
+                r.raw, self.correct.get(pid, 0), len(self.questions))
         super().finish()
 
     def live_rows(self):
-        return {pid: self.correct.get(pid, 0) for pid in self.ctx.local_pids}
+        return {pid: self.points.get(pid, 0.0) for pid in self.ctx.local_pids}
 
     # -- Anzeige --------------------------------------------------------
     def draw(self, surf):
@@ -156,6 +177,11 @@ class QuizGame(MiniGame):
                   U.MUTED, (area.x + 4, area.y))
         U.timer_bar(surf, (area.x, area.y + 26, area.w, 10),
                     1.0 - self.q_time / self.per_q)
+        # Was eine richtige Antwort JETZT noch bringt - macht Tempo greifbar
+        now = self.speed_points(self.q_time)
+        img = fonts.body_bold(16).render("jetzt %d Punkte" % now, True,
+                                         U.GOLD if now > 70 else U.MUTED)
+        surf.blit(img, img.get_rect(topright=(area.right - 4, area.y)))
 
         qarea = pygame.Rect(area.x, area.y + 52, area.w, area.h - 232)
         self.draw_question(surf, qarea, q)
@@ -203,10 +229,20 @@ def draw_local_strip(game, surf, area, value_fn=None, sub_fn=None):
         draw_text(surf, fonts.body_bold(14),
                   U.fit(fonts.body_bold(14), p.name, cw - 66), U.TEXT,
                   (box.x + 12, box.y + 7))
-        sub = sub_fn(p) if sub_fn else "%d richtig" % game.correct.get(p.pid, 0)
+        if sub_fn:
+            sub = sub_fn(p)
+        else:
+            sub = "%d Pkt" % round(getattr(game, "points", {}).get(p.pid, 0))
         draw_text(surf, fonts.body(12), sub, U.MUTED, (box.x + 12, box.y + 28))
-        val = value_fn(p) if value_fn else ("OK" if answered else "")
+        if value_fn:
+            val = value_fn(p)
+        elif answered:
+            gain = getattr(game, "gained", {}).get(p.pid, 0)
+            val = ("+%d" % gain) if gain else "-"
+        else:
+            val = ""
         if val:
-            img = fonts.display(17).render(str(val), True, U.OK if val == "OK" else U.TEXT)
+            col = U.OK if str(val).startswith("+") else (U.BAD if val == "-" else U.TEXT)
+            img = fonts.display(17).render(str(val), True, col)
             surf.blit(img, img.get_rect(midright=(box.right - 12, box.centery)))
         x += cw + 10

@@ -12,6 +12,8 @@ from ..colors import PLAYER_COLORS, color_for
 from ..config import DEFAULT_GAME_PORT
 from ..game.powerups import PICKER_OPTIONS, RANDOM_ID, powerup_label
 from ..net.discovery import Beacon, local_ip
+from ..net.internet import PublicIP
+from ..net.upnp import PortMapper
 from ..net.host import GameHost
 from ..session import GameSession, PlayerDef
 from ..ui.widgets import Button, Dropdown, TextInput, draw_text, wrap_text
@@ -34,6 +36,12 @@ class LobbyScene(BaseMenuScene):
         self._client_players: dict[int, list[int]] = {}   # cid -> [pid,...]
         self._dropdowns: list[Dropdown] = []
         self.host_error: tuple | None = None
+        self.mapper: PortMapper | None = None      # Portfreigabe im Router
+        self.public: PublicIP | None = None
+        # Overlay "einzelnes Spiel starten" - bewusst als Overlay und nicht als
+        # eigene Szene, damit der Host waehrenddessen weiter am Netz bleibt.
+        self.picker_open = False
+        self._picker_widgets: list = []
 
     # ------------------------------------------------------------------ #
     def adopt(self, session: GameSession) -> None:
@@ -64,6 +72,13 @@ class LobbyScene(BaseMenuScene):
                 if self.host:
                     self.beacon = Beacon(self._beacon_info)
                     self.beacon.start()
+                    # Fuer Spielen uebers Internet: Port im Router oeffnen
+                    # und die oeffentliche Adresse ermitteln - beides im
+                    # Hintergrund, das Menue bleibt bedienbar.
+                    self.mapper = PortMapper(self.host.port)
+                    self.mapper.start()
+                    self.public = PublicIP()
+                    self.public.start()
         self.build()
 
     def on_exit(self) -> None:
@@ -141,37 +156,104 @@ class LobbyScene(BaseMenuScene):
                                    self._start, "ghost"))
         self.widgets.append(Button((w - 410, h - 78, 182, 50), "TURNIER",
                                    self._start_tournament, "primary"))
+        self.widgets.append(Button((w - 618, h - 78, 196, 50), "Einzelnes Spiel",
+                                   self._open_picker, "ghost"))
         self.widgets.append(Button((w - 220, by, 172, 40), "Zurueck", self._back, "ghost"))
 
-    def _draw_net_box(self, surf, w) -> None:
-        """Deutlich sichtbar: worauf muessen die anderen verbinden?"""
+    def _draw_picker(self, surf) -> None:
+        from ..party.registry import GAME_BY_ID
+
+        w, h = self.size
+        veil = pygame.Surface((w, h), pygame.SRCALPHA)
+        veil.fill((10, 12, 20, 170))
+        surf.blit(veil, (0, 0))
+        panel = self._picker_rect()
+        pygame.draw.rect(surf, T.SURFACE, panel, border_radius=T.R_LG)
+        pygame.draw.rect(surf, T.BORDER, panel, width=1, border_radius=T.R_LG)
         fonts = self.app.fonts
-        box = pygame.Rect(w - 430, 26, 382, 78)
+        draw_text(surf, fonts.display(24), "Einzelnes Spiel starten", T.TEXT,
+                  (panel.x + 24, panel.y + 20))
+        draw_text(surf, fonts.body(14),
+                  "Ein Durchgang, danach geht es zurueck in die Lobby - "
+                  "alle Mitspieler im LAN sind dabei.",
+                  T.TEXT_MUTED, (panel.x + 24, panel.y + 50))
+        for wgt in self._picker_widgets:
+            wgt.draw(surf, fonts)
+
+    def _draw_net_box(self, surf, w) -> None:
+        """Zeigt beide Adressen: im WLAN und uebers Internet."""
+        fonts = self.app.fonts
+        box = pygame.Rect(w - 452, 22, 404, 108)
         if self.mode != "host":
             if self.mode == "local":
                 draw_text(surf, fonts.body(13),
-                          "Fuer LAN: zurueck und 'Uber LAN hosten' waehlen",
-                          T.TEXT_MUTED, (box.x + 90, 60))
+                          "Fuer LAN/Internet: zurueck und 'Uber LAN hosten' waehlen",
+                          T.TEXT_MUTED, (box.x + 40, 60))
             return
         if not self.host:
             pygame.draw.rect(surf, (253, 238, 238), box, border_radius=T.R_SM)
             pygame.draw.rect(surf, T.DANGER, box, width=2, border_radius=T.R_SM)
             head, tip = self.host_error or ("Host konnte nicht starten", "")
-            draw_text(surf, fonts.body_bold(15), head, T.DANGER, (box.x + 14, box.y + 8))
+            draw_text(surf, fonts.body_bold(15), head, T.DANGER, (box.x + 14, box.y + 10))
             for i, line in enumerate(wrap_text(fonts.body(12), tip, box.w - 28)):
                 draw_text(surf, fonts.body(12), line, T.TEXT_MUTED,
-                          (box.x + 14, box.y + 30 + i * 16))
+                          (box.x + 14, box.y + 32 + i * 16))
             return
+
         pygame.draw.rect(surf, T.SURFACE, box, border_radius=T.R_SM)
         pygame.draw.rect(surf, T.OK, (box.x, box.y, 5, box.h), border_radius=2)
-        draw_text(surf, fonts.body(12), "Die anderen geben das hier ein:",
-                  T.TEXT_MUTED, (box.x + 16, box.y + 8))
-        addr = "%s:%d" % (local_ip(), self.host.port)
-        draw_text(surf, fonts.display(26), addr, T.TEXT, (box.x + 16, box.y + 26))
+
         n = self.host.client_count
-        info = "%d verbunden" % n if n else "warte auf Mitspieler ..."
-        draw_text(surf, fonts.body(12), info, T.OK if n else T.TEXT_MUTED,
-                  (box.x + 16, box.y + 58))
+        draw_text(surf, fonts.body(12),
+                  "%d verbunden" % n if n else "warte auf Mitspieler ...",
+                  T.OK if n else T.TEXT_MUTED, (box.right - 132, box.y + 8))
+
+        draw_text(surf, fonts.body(11), "Im gleichen WLAN:", T.TEXT_MUTED,
+                  (box.x + 14, box.y + 8))
+        draw_text(surf, fonts.display(22), "%s:%d" % (local_ip(), self.host.port),
+                  T.TEXT, (box.x + 14, box.y + 22))
+
+        draw_text(surf, fonts.body(11), "Uebers Internet:", T.TEXT_MUTED,
+                  (box.x + 14, box.y + 54))
+        ip = self.public.ip if self.public else ""
+        if not ip and self.mapper:
+            ip = self.mapper.external_ip
+        if ip:
+            state = self.mapper.status if self.mapper else "idle"
+            col = T.OK if state == "ok" else (T.WARN if state == "fehlgeschlagen" else T.TEXT_MUTED)
+            draw_text(surf, fonts.display(22), "%s:%d" % (ip, self.host.port),
+                      T.TEXT, (box.x + 14, box.y + 68))
+            mark = {"ok": "Port offen", "suchen": "oeffne Port ...",
+                    "fehlgeschlagen": "Port pruefen!"}.get(state, "")
+            if mark:
+                draw_text(surf, fonts.body(11), mark, col, (box.right - 132, box.y + 74))
+        else:
+            draw_text(surf, fonts.body(14), "wird ermittelt ...", T.TEXT_MUTED,
+                      (box.x + 14, box.y + 70))
+
+    def _draw_net_hint(self, surf, w, h) -> None:
+        """Unter der Spielerliste: was tun, wenn das Internet-Spiel klemmt."""
+        if self.mode != "host" or not self.host or not self.mapper:
+            return
+        fonts = self.app.fonts
+        if self.mapper.status == "ok":
+            draw_text(surf, fonts.body(13),
+                      "Internet: Router-Port automatisch geoeffnet - die obere "
+                      "Adresse funktioniert auch von ausserhalb.",
+                      T.OK, (48, h - 196))
+            return
+        if self.mapper.status == "suchen":
+            draw_text(surf, fonts.body(13), "Internet: frage den Router nach der "
+                      "Portfreigabe ...", T.TEXT_MUTED, (48, h - 196))
+            return
+        if self.mapper.status == "fehlgeschlagen":
+            draw_text(surf, fonts.body_bold(13),
+                      "Internet-Spiel: Port muss von Hand freigegeben werden",
+                      T.WARN, (48, h - 200))
+            for i, line in enumerate(wrap_text(fonts.body(12), self.mapper.message,
+                                               min(820, w - 100), max_lines=2)):
+                draw_text(surf, fonts.body(12), line, T.TEXT_MUTED,
+                          (48, h - 182 + i * 16))
 
     def _build_row(self, x, y, w, p: PlayerDef) -> None:
         self.widgets.append(_Swatch((x, y, 34, 34), p, self))
@@ -275,6 +357,8 @@ class LobbyScene(BaseMenuScene):
 
         if self.beacon:
             self.beacon.stop()
+        if self.mapper:
+            self.mapper.close()
         if self.host:
             self.host.stop()
         for slot in self.app.config.slots:
@@ -296,7 +380,46 @@ class LobbyScene(BaseMenuScene):
         self.app.audio.play("click")
         self.app.set_scene(GameScene(self.app, session))
 
-    def _start_tournament(self) -> None:
+    # -- Einzelnes Minispiel -------------------------------------------
+    def _open_picker(self) -> None:
+        from ..party.registry import ALL_GAMES
+
+        self.picker_open = True
+        self._picker_widgets = []
+        w, h = self.size
+        panel = self._picker_rect()
+        cols = 2
+        bw = (panel.w - 48 - 16 * (cols - 1)) // cols
+        bh = 54
+        for i, game in enumerate(ALL_GAMES):
+            cx = panel.x + 24 + (i % cols) * (bw + 16)
+            cy = panel.y + 74 + (i // cols) * (bh + 10)
+            self._picker_widgets.append(
+                Button((cx, cy, bw, bh), game.name,
+                       (lambda gid=game.id: self._start_single(gid)), "ghost"))
+        self._picker_widgets.append(
+            Button((panel.centerx - 80, panel.bottom - 60, 160, 42), "Abbrechen",
+                   self._close_picker, "ghost"))
+
+    def _picker_rect(self) -> pygame.Rect:
+        from ..party.registry import ALL_GAMES
+
+        w, h = self.size
+        rows = (len(ALL_GAMES) + 1) // 2
+        ph = min(h - 60, 74 + rows * 64 + 80)
+        pw = min(760, w - 80)
+        return pygame.Rect((w - pw) // 2, (h - ph) // 2, pw, ph)
+
+    def _close_picker(self) -> None:
+        self.picker_open = False
+        self._picker_widgets = []
+
+    def _start_single(self, game_id: str) -> None:
+        """Ein einzelnes Minispiel - laeuft ueber dieselbe Turnierlogik."""
+        self._close_picker()
+        self._start_tournament(order=[game_id])
+
+    def _start_tournament(self, order: list | None = None) -> None:
         """Baut das Turnier, verteilt Reihenfolge + Spieler und startet es."""
         import random as _r
 
@@ -310,8 +433,9 @@ class LobbyScene(BaseMenuScene):
             p.pid = i
         self.app.config.save()
         st = self.app.config.settings
-        order = Tournament.build_order(_r.Random(), st.enabled_party_games(),
-                                       st.party_games, st.party_shuffle)
+        if order is None:
+            order = Tournament.build_order(_r.Random(), st.enabled_party_games(),
+                                           st.party_games, st.party_shuffle)
         party = [
             PartyPlayer(pid=p.pid, name=p.name, color=color_for(p.color_index),
                         color_index=p.color_index, is_local=(p.client_id < 0),
@@ -394,6 +518,15 @@ class LobbyScene(BaseMenuScene):
 
     # ------------------------------------------------------------------ #
     def handle_events(self, events) -> None:
+        if self.picker_open:
+            for e in events:
+                if e.type == pygame.KEYDOWN and e.key == pygame.K_ESCAPE:
+                    self._close_picker()
+                    return
+                for wgt in self._picker_widgets:
+                    if wgt.handle_event(e):
+                        break
+            return
         for e in events:
             if e.type == pygame.KEYDOWN and e.key == pygame.K_ESCAPE:
                 self._back()
@@ -422,12 +555,15 @@ class LobbyScene(BaseMenuScene):
         draw_text(surf, self.app.fonts.body(16), sub, T.TEXT_MUTED, (50, 84))
         pygame.draw.line(surf, T.BORDER, (48, 116), (w - 48, 116), 1)
         self._draw_net_box(surf, w)
+        self._draw_net_hint(surf, w, h)
 
         for wgt in self.widgets:
             wgt.draw(surf, self.app.fonts)
         for dd in self._dropdowns:
             if dd.open:
                 dd.draw_overlay(surf, self.app.fonts)
+        if self.picker_open:
+            self._draw_picker(surf)
 
 
 class _Swatch:

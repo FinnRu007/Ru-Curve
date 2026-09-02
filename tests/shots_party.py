@@ -26,7 +26,7 @@ os.makedirs(OUT, exist_ok=True)
 WARMUP = {
     "reaction": 2.6, "sequence": 1.2, "math": 1.6, "area": 1.6,
     "estimate": 1.2, "oddone": 1.2, "mash": 2.5, "stopbar": 1.2,
-    "timesense": 2.0, "aim": 3.0, "curve": 6.0,
+    "timesense": 2.0, "race": 8.0, "curve": 6.0,
 }
 
 

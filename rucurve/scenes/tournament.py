@@ -458,7 +458,8 @@ class TournamentScene:
         side = self.side_rect()
         if side:
             U.leaderboard(surf, self.app.fonts, side, self._standing_rows(),
-                          heading="Gesamt", compact=len(self.players) > 8)
+                          heading="Jetzt" if self.phase == "play" else "Gesamt",
+                          compact=len(self.players) > 8)
 
         if self.phase == "intro" and self.game_cls is None:
             self._draw_waiting(surf)
@@ -478,11 +479,26 @@ class TournamentScene:
 
     def _standing_rows(self):
         rows = self.tour.standings()
-        if self.phase == "play":
-            for r in rows:
-                v = self.live.get(r["pid"])
-                if v is not None:
-                    r["value"] = v
+        if self.phase != "play":
+            return rows
+        # Waehrend eines Minispiels nach dem LAUFENDEN Stand sortieren - man
+        # soll jederzeit sehen, ob man gerade vorn liegt, nicht nur wie das
+        # Turnier insgesamt steht.
+        seen = False
+        for r in rows:
+            v = self.live.get(r["pid"])
+            if v is not None:
+                r["value"] = (self.game_cls.live_label(v)
+                              if self.game_cls else str(v))
+                seen = True
+        if not seen:
+            return rows
+        scoring = self.game_cls.scoring if self.game_cls else "high"
+        sign = -1.0 if scoring == "high" else 1.0
+        rows.sort(key=lambda r: (self.live.get(r["pid"]) is None,
+                                 sign * float(self.live.get(r["pid"], 0.0))))
+        for i, r in enumerate(rows):
+            r["place"] = i + 1
         return rows
 
     def _draw_header(self, surf):

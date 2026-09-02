@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from .games.aim import AimGame
 from .games.curve_game import CurveGame
+from .games.race import RaceGame
 from .games.quizzes import AreaQuiz, EstimateQuiz, MathQuiz, OddOneQuiz
 from .games.reflex import (
     MashGame,
@@ -23,7 +23,7 @@ ALL_GAMES = [
     MashGame,
     StopBarGame,
     TimeSenseGame,
-    AimGame,
+    RaceGame,
     CurveGame,
 ]
 
