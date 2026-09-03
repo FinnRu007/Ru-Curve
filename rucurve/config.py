@@ -111,7 +111,10 @@ class GameSettings:
 
     # Turnier (Minispiel-Modus)
     party_games: int = 8             # wie viele Minispiele pro Turnier
-    party_points_top: int = 10       # Punkte fuer Platz 1 eines Minispiels
+    # Punkte fuer Platz 1 eines Minispiels. Untergrenze: spielen mehr Leute
+    # mit als es Punkte gibt, waechst der Wert automatisch mit - sonst muessten
+    # sich zwei Plaetze die gleiche Punktzahl teilen.
+    party_points_top: int = 10
     party_shuffle: bool = True       # Reihenfolge mischen
     party_enabled: dict = field(default_factory=dict)   # gid -> bool
 

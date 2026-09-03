@@ -204,6 +204,49 @@ def test_single_player_tournament():
     assert len(scene.tour.standings()) == 1
 
 
+def test_no_place_scores_as_much_as_the_one_before():
+    """Der zweite Platz darf nie so viele Punkte bekommen wie der erste.
+
+    Genau das passierte: mit 10 Punkten fuer Platz 1 und 20 Spielern lag
+    zwischen den Plaetzen nur ein halber Punkt, und beide wurden auf 10
+    gerundet. Ab 12 Spielern gab es Dopplungen, ab 20 traf es die Spitze.
+    """
+    from rucurve.party.tournament import points_for_place
+
+    for top in range(2, 31):
+        for n in range(2, 61):
+            pts = [points_for_place(pl, n, top) for pl in range(1, n + 1)]
+            for i in range(len(pts) - 1):
+                assert pts[i] > pts[i + 1], (
+                    "top=%d, %d Spieler: Platz %d und %d bekommen %d / %d"
+                    % (top, n, i + 1, i + 2, pts[i], pts[i + 1]))
+            assert pts[0] >= top, "Platz 1 bekommt weniger als eingestellt"
+            assert pts[-1] == 1, "letzter Platz bekommt nicht genau 1"
+
+
+def test_small_fields_keep_the_old_point_scale():
+    """Bis zur eingestellten Punktzahl darf sich nichts geaendert haben."""
+    from rucurve.party.tournament import points_for_place
+
+    assert [points_for_place(p, 6, 10) for p in range(1, 7)] == [10, 8, 6, 5, 3, 1]
+    assert [points_for_place(p, 10, 10) for p in range(1, 11)] == list(range(10, 0, -1))
+    assert [points_for_place(p, 2, 10) for p in (1, 2)] == [10, 1]
+
+
+def test_a_real_tie_shares_the_place_and_the_points():
+    """Wer wirklich gleich gut war, teilt Platz UND Punkte - und der naechste
+    Platz wird uebersprungen, statt dieselbe Punktzahl noch einmal zu geben."""
+    from rucurve.party.base import Result
+    from rucurve.party.tournament import rank_results
+
+    res = {0: Result(raw=5.0, time=0.0, done=True),
+           1: Result(raw=5.0, time=0.0, done=True),
+           2: Result(raw=3.0, time=0.0, done=True)}
+    rows = {r["pid"]: r["place"] for r in rank_results(res)}
+    assert rows[0] == rows[1] == 1, rows
+    assert rows[2] == 3, "nach zwei Ersten muss Platz 3 kommen"
+
+
 if __name__ == "__main__":
     import traceback
 

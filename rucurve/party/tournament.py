@@ -9,10 +9,18 @@ from .base import PartyPlayer, Result
 
 
 def points_for_place(place: int, n_players: int, top: int = 10) -> int:
-    """Platz 1 bekommt `top` Punkte, der letzte Platz 1 - linear dazwischen."""
+    """Platz 1 bekommt `top` Punkte, der letzte Platz 1 - linear dazwischen.
+
+    **Kein Platz darf so viele Punkte bekommen wie der davor.** Mit festem
+    `top` ging das schief, sobald mehr Leute mitspielen als es Punkte gibt:
+    bei 10 Punkten und 20 Spielern bekamen Platz 1 und 2 beide zehn, weil
+    zwischen den Plaetzen nur noch ein halber Punkt lag und gerundet wurde.
+    Darum ist die Spanne mindestens so gross wie das Feld - bei vielen
+    Spielern waechst die Punktzahl fuer Platz 1 also mit.
+    """
     if n_players <= 1:
         return top
-    span = max(1, top - 1)
+    span = max(1, top - 1, n_players - 1)
     return int(1 + round(span * (n_players - place) / (n_players - 1)))
 
 

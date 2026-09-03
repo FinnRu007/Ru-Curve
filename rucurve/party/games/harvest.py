@@ -78,6 +78,7 @@ class HarvestGame(ArenaGame):
                 if math.hypot(it["x"] - u["x"], it["y"] - u["y"]) <= reach:
                     self.items.remove(it)
                     u["score"] += 1
+                    u["last_gain"] = self.sim_time
                     self.ctx.play("powerup" if it["kind"] == 0 else "correct")
                     if it["kind"] == 0:
                         self._spawn_crystal()
@@ -101,6 +102,8 @@ class HarvestGame(ArenaGame):
             # selbstlos - man haette die Beute nur fuer alle anderen verteilt.
             grabbed = lost // 2
             pusher["score"] += grabbed
+            if grabbed:
+                pusher["last_gain"] = self.sim_time
             ang = math.atan2(victim["y"] - pusher["y"], victim["x"] - pusher["x"])
             self.knockback(victim, ang, 150.0 + closing * 0.4, 0.45)
             self._scatter(victim, lost - grabbed)
@@ -153,6 +156,16 @@ class HarvestGame(ArenaGame):
     # -- Ergebnis -------------------------------------------------------
     def score_detail(self, u):
         return "%d Kristalle" % round(u["score"])
+
+    def finish(self):
+        super().finish()
+        if not self.ctx.is_host:
+            return
+        # Gleiche Zahl Kristalle: wer sie frueher zusammen hatte, steht vorn.
+        # Sonst teilen sich bei vielen Mitspielern reihenweise Leute die
+        # Plaetze, weil die Punktzahlen ganze Zahlen sind.
+        for pid, r in self.results_map.items():
+            r.time = round(self.units[pid].get("last_gain", self.max_seconds), 3)
 
     # -- Anzeige --------------------------------------------------------
     def draw_world(self, surf):

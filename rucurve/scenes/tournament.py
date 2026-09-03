@@ -593,6 +593,10 @@ class TournamentScene:
         U.subtitle(surf, fonts, rec.game_name, area.y + 62, center_x=area.centerx)
 
         rows = sorted(rec.rows, key=lambda r: r.get("place", 99))
+        # Echter Gleichstand: gleiche Leistung, gleicher Platz, gleiche Punkte.
+        # Das ist richtig so - aber ohne Hinweis sieht es wie ein Fehler aus.
+        shared = {r["place"] for r in rows
+                  if sum(1 for q in rows if q["place"] == r["place"]) > 1}
         top = area.y + 104
         row_h = min(56, max(34, (area.bottom - top - 90) // max(1, len(rows))))
         wdt = min(560, area.w - 40)
@@ -610,7 +614,10 @@ class TournamentScene:
                 pygame.draw.circle(surf, p.color, (box.x + 54, box.centery), 8)
                 draw_text(surf, fonts.body_bold(17), U.fit(fonts.body_bold(17), p.name, 200),
                           U.TEXT, (box.x + 72, box.centery - 10))
-            draw_text(surf, fonts.body(14), str(r.get("detail", "")), U.MUTED,
+            detail = str(r.get("detail", ""))
+            if place in shared:
+                detail = (detail + "   (geteilter Platz)").strip()
+            draw_text(surf, fonts.body(14), detail, U.MUTED,
                       (box.x + 300, box.centery - 8))
             pts = fonts.display(20).render("+%d" % r.get("points", 0), True, U.OK)
             surf.blit(pts, pts.get_rect(midright=(box.right - 16, box.centery)))

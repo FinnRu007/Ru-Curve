@@ -60,7 +60,7 @@ SECTIONS: list[tuple[str, str, list]] = [
     ]),
     ("turnier", "Turnier", [
         ("num", "party_games", "Anzahl Minispiele", 1, 40, 1, 0, ""),
-        ("num", "party_points_top", "Punkte fuer Platz 1", 2, 50, 1, 0, ""),
+        ("num", "party_points_top", "Punkte fuer Platz 1 (mind.)", 2, 50, 1, 0, ""),
         ("bool", "party_shuffle", "Reihenfolge mischen"),
     ]),
     ("bots", "Bots", [

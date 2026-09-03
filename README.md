@@ -130,7 +130,18 @@ Der Host legt fest, wie viele Minispiele gespielt werden (Standard 8) und welche
 ueberhaupt vorkommen. Vor jedem Spiel gibt es eine kurze Erklaerung und einen
 Countdown, danach wird gespielt, ausgewertet und Punkte verteilt:
 **Platz 1 bekommt 10 Punkte**, der letzte Platz 1 - dazwischen linear. Bei
-Gleichstand entscheidet, wer schneller war. Rechts laeuft immer die Gesamtrangliste
+Gleichstand entscheidet, wer schneller war.
+
+Kein Platz bekommt dabei so viele Punkte wie der davor. Das ging vorher
+schief, sobald mehr Leute mitspielen als es Punkte gibt: bei 10 Punkten und
+20 Spielern lag zwischen zwei Plaetzen nur ein halber Punkt, und beide wurden
+auf 10 gerundet - Platz 1 und 2 bekamen dasselbe. Die Spanne ist jetzt
+mindestens so gross wie das Feld, bei 20 Spielern gibt es fuer Platz 1 also
+20 Punkte. Die Einstellung ist damit eine **Untergrenze**.
+
+Waren zwei wirklich gleich gut, teilen sie sich Platz und Punkte, und der
+naechste Platz wird uebersprungen (1., 1., 3.) - im Ergebnis steht dann
+*geteilter Platz*. Rechts laeuft immer die Gesamtrangliste
 mit.
 
 ### Gegeneinander - alle gleichzeitig in einer Arena
@@ -142,7 +153,7 @@ Zusammenstoss auf jedem Rechner gleich ausgeht.
 | Minispiel | Worum es geht |
 |---|---|
 | **Ru-Sumo** | Ring, in dem alle fahren - schubse die anderen hinaus. Die Aktionstaste ist ein Rammstoss, ein Treffer damit schleudert deutlich weiter. Der Ring schrumpft, es wird also zwangslaeufig eng. Gewertet wird die ueberlebte Zeit. |
-| **Ru-Jagd** | Einer ist der Faenger (rot markiert). Punkte gibt es fuer jede Sekunde, in der du es *nicht* bist. Wer gefangen wird, ist selbst dran. Der Faenger ist etwas schneller, und wer vorn liegt, wird bevorzugt gejagt - ein Vorsprung bleibt nie bequem. |
+| **Ru-Jagd** | Die rot markierten Spieler sind die Faenger - **einer je fuenf Mitspieler**, bei 20 Leuten also vier. Punkte gibt es fuer jede Sekunde, in der du keiner bist. Wer gefangen wird, ist selbst dran. Faenger sind etwas schneller, und wer vorn liegt, wird bevorzugt gejagt - ein Vorsprung bleibt nie bequem. |
 | **Ru-Ernte** | Kristalle einsammeln. Der Kniff: ein Rammstoss schlaegt dem Getroffenen Kristalle aus der Hand - die Haelfte greift sich der Rammende sofort, der Rest fliegt als Splitter weg. Wer viel hat, verliert pro Treffer mehr und ist damit Zielscheibe fuers ganze Feld. |
 | **Ru-Rennen** | Autorennen ueber zwei Runden: lenken, Aktionstaste gibt Schub. Rempler kosten Tempo. Abkuerzen quer ueber das Innenfeld bringt nichts - der Fortschritt friert dort ein, wo du die Bahn verlassen hast. |
 | **Achtung die Kurve** | Eine kurze Runde des Originalspiels - wer am laengsten ueberlebt, gewinnt. |

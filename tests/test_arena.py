@@ -226,22 +226,61 @@ def test_stronger_sumo_bots_last_longer():
 # =========================================================================== #
 def test_tag_only_the_hunter_earns_nothing():
     g = make(TagGame, DIFFS)
-    it = g.it
     before = {pid: u["score"] for pid, u in g.units.items()}
     for _ in range(30):
         g.step_world(1 / 60.0)
-    assert g.units[it]["score"] == before[it], "Faenger sammelt trotzdem Punkte"
     for pid, u in g.units.items():
-        if pid != it:
+        if u["hunter"]:
+            assert u["score"] == before[pid], "Faenger sammelt trotzdem Punkte"
+        else:
             assert u["score"] > before[pid], "Fluechtender sammelt nicht"
 
 
 def test_tag_hunter_is_faster():
     g = make(TagGame, DIFFS)
     g.step_world(1 / 60.0)
-    hunter = g.units[g.it]
-    other = next(u for pid, u in g.units.items() if pid != g.it)
+    hunter = g.hunters()[0]
+    other = next(u for u in g.units.values() if not u["hunter"])
     assert hunter["slow"] > other["slow"], "Faenger ist nicht schneller"
+
+
+def test_tag_scales_the_number_of_hunters_with_the_field():
+    """Mit einem Faenger und zwanzig Leuten wird kaum jemand erwischt - dann
+    teilen sich am Ende zehn Spieler den ersten Platz."""
+    for n, want in ((2, 1), (6, 1), (10, 2), (15, 3), (20, 4)):
+        g = make(TagGame, [0.5] * n)
+        assert len(g.hunters()) == want, (
+            "%d Spieler -> %d Faenger (erwartet %d)" % (n, len(g.hunters()), want))
+        assert len(g.hunters()) < n, "es muss immer jemand zu fangen sein"
+
+
+def test_tag_big_field_does_not_end_in_a_mass_tie():
+    """Der Fall aus der Praxis: 20 Spieler, und die Haelfte teilt Platz 1."""
+    from rucurve.party.tournament import rank_results
+
+    worst = 0
+    for seed in range(3):
+        g = make(TagGame, [0.5] * 20, seed=seed)
+        play(g)
+        rows = rank_results(g.results(), TagGame.scoring)
+        first = sum(1 for r in rows if r["place"] == 1)
+        worst = max(worst, first)
+    assert worst <= 3, "%d Spieler teilen sich den ersten Platz" % worst
+
+
+def test_tag_catching_someone_breaks_a_tie():
+    """Gleiche freie Zeit: wer selbst jemanden gefangen hat, steht vorn."""
+    g = make(TagGame, [0.5] * 4)
+    play(g, seconds=2.0)
+    for u in g.units.values():
+        u["hunter"] = False
+        u["score"] = 20.0
+    g.it_time = {pid: 5.0 for pid in g.units}
+    g.catches = {0: 2, 1: 0, 2: 0, 3: 0}
+    g.finish()
+    res = g.results()
+    assert res[0].raw == res[1].raw, "Testaufbau: Rohwerte muessen gleich sein"
+    assert res[0].time < res[1].time, "Faenge brechen den Gleichstand nicht"
 
 
 def test_tag_role_does_not_ping_pong():
@@ -255,7 +294,7 @@ def test_tag_role_does_not_ping_pong():
         while not g.finished and t < TagGame.max_seconds:
             g.update(1 / 60.0)
             t += 1 / 60.0
-            involved.add(g.it)
+            involved.update(u["pid"] for u in g.hunters())
         seen.add(len(involved))
         assert len(involved) >= 3, (
             "Seed %d: nur %d verschiedene Faenger" % (seed, len(involved)))
@@ -264,29 +303,27 @@ def test_tag_role_does_not_ping_pong():
 
 def test_tag_fresh_hunter_cannot_tag_immediately():
     g = make(TagGame, DIFFS)
-    it = g.units[g.it]
-    victim = next(u for pid, u in g.units.items() if pid != g.it)
-    it.update({"x": 800.0, "y": 450.0})
+    it = g.hunters()[0]
+    victim = next(u for u in g.units.values() if not u["hunter"])
+    it.update({"x": 800.0, "y": 450.0, "h": 0.0, "v": 300.0, "cool": 0.0})
     victim.update({"x": 800.0 + TagGame.RADIUS * 1.5, "y": 450.0, "h": math.pi,
-                   "v": 300.0})
-    it["h"], it["v"] = 0.0, 300.0
-    g.tag_cool = 0.0
+                   "v": 300.0, "immune": 0.0})
     g._collide()
-    new_it = g.it
-    assert new_it == victim["pid"], "Beruehrung hat nicht gefangen"
+    assert victim["hunter"], "Beruehrung hat nicht gefangen"
+    assert not it["hunter"], "der Faenger blieb Faenger"
+    assert victim["cool"] > 0.0, "frischer Faenger darf nicht sofort fangen"
+    assert it["immune"] > 0.0, "wer abgibt, muss kurz sicher sein"
     # Sofort noch einmal: darf NICHT zurueckwechseln
     g._collide()
-    assert g.it == new_it, "Rolle sprang sofort zurueck"
-    assert g.tag_cool > 0.0
-    assert it["immune"] > 0.0, "wer abgibt, muss kurz sicher sein"
+    assert victim["hunter"] and not it["hunter"], "Rolle sprang sofort zurueck"
 
 
 def test_tag_hunter_prefers_the_leader():
     """Wer vorn liegt, wird gejagt - sonst lohnt es sich, weit weg zu warten."""
     g = make(TagGame, (0.5, 0.5, 0.5))
-    hunter = g.units[g.it]
+    hunter = g.hunters()[0]
     hunter.update({"x": 800.0, "y": 450.0})
-    others = [u for pid, u in g.units.items() if pid != g.it]
+    others = [u for u in g.units.values() if not u["hunter"]]
     near, far = others[0], others[1]
     near.update({"x": 800.0, "y": 620.0, "score": 1.0})     # nah, wenig Punkte
     far.update({"x": 800.0, "y": 200.0, "score": 40.0})     # weiter, fuehrt
