@@ -155,7 +155,7 @@ Zusammenstoss auf jedem Rechner gleich ausgeht.
 | **Ru-Sumo** | Ring, in dem alle fahren - schubse die anderen hinaus. Die Aktionstaste ist ein Rammstoss, ein Treffer damit schleudert deutlich weiter. Der Ring schrumpft, es wird also zwangslaeufig eng. Gewertet wird die ueberlebte Zeit. |
 | **Ru-Jagd** | Die rot markierten Spieler sind die Faenger - **einer je fuenf Mitspieler**, bei 20 Leuten also vier. Punkte gibt es fuer jede Sekunde, in der du keiner bist. Wer gefangen wird, ist selbst dran. Faenger sind etwas schneller, und wer vorn liegt, wird bevorzugt gejagt - ein Vorsprung bleibt nie bequem. |
 | **Ru-Ernte** | Kristalle einsammeln. Der Kniff: ein Rammstoss schlaegt dem Getroffenen Kristalle aus der Hand - die Haelfte greift sich der Rammende sofort, der Rest fliegt als Splitter weg. Wer viel hat, verliert pro Treffer mehr und ist damit Zielscheibe fuers ganze Feld. |
-| **Ru-Rennen** | Autorennen ueber zwei Runden: lenken, Aktionstaste gibt Schub. Rempler kosten Tempo. Abkuerzen quer ueber das Innenfeld bringt nichts - der Fortschritt friert dort ein, wo du die Bahn verlassen hast. |
+| **Ru-Rennen** | Autorennen ueber vier Runden: lenken, Aktionstaste gibt Schub. Rempler kosten Tempo. Abkuerzen quer ueber das Innenfeld bringt nichts - der Fortschritt friert dort ein, wo du die Bahn verlassen hast. |
 | **Achtung die Kurve** | Eine kurze Runde des Originalspiels - wer am laengsten ueberlebt, gewinnt. |
 
 Alle fuenf teilen dieselbe Steuerung und dieselbe Grundlage
@@ -206,6 +206,22 @@ gilt, entscheidet allein der Host und gibt es weiter. Die Stufe fuer Aufgabe
 i+1 steht schon fest, waehrend Aufgabe i laeuft - eine ganze Aufgabenlaenge
 Vorlauf, damit die Entscheidung auch ueber LAN und Internet rechtzeitig
 ankommt.
+
+## Vor jedem Spiel
+
+Der Erklaerungsschirm nennt drei Dinge: das **Ziel**, was **deine drei Tasten
+hier tun** (bei jedem Spiel etwas anderes) und **wofuer es Punkte gibt**.
+Darunter steht deine eigene Tastenbelegung, dann laeuft der Countdown.
+
+## Sound
+
+Alle Klaenge sind bewusst leise und ohne scharfe Hoehen. Die erste Fassung war
+zu laut (Spitzen bis 0.50) und beim Anpfiff lagen 75 % der Energie ueber 2 kHz
+- genau dort, wo es im Ohr weh tut. Jetzt liegt die lauteste Datei bei 0.19,
+die mittlere Lautstaerke ist rund 10 dB niedriger, und kein Klang hat mehr als
+13 % Energie oberhalb 2 kHz. Was oft vorkommt (Rempler, Anpfiff, Ticken), ist
+noch einmal leiser als der Rest. `tests/test_sounds.py` haelt diese Grenzen
+fest; erzeugt werden die Dateien von `tools/make_assets.py`.
 
 ## Steuerung
 
@@ -286,6 +302,7 @@ python tests/test_party_join.py  # Lobby -> TURNIER: Mitspieler kommt wirklich m
 python tests/test_race.py        # Ru-Rennen: Strecke, Rundenzaehlung, Bots, Rempler, Abkuerzen
 python tests/test_speed_and_updates.py  # Tempo-Wertung, Update-Hinweis, Startanimation
 python tests/test_arena.py       # Sumo, Jagd, Ernte: Stoesse, Rollen, Klauen, Netz
+python tests/test_sounds.py      # Sounds: Lautstaerke, Schaerfe, keine Knackser
 python tests/test_adaptive.py    # Schwierigkeitsstufen - und dass alle dieselbe Aufgabe sehen
 python tests/test_hover.py       # jedes anklickbare Element markiert sich unter der Maus
 python tests/shots.py            # rendert alle Szenen als PNG nach tests/_shots/

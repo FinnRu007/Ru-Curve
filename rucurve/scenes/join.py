@@ -203,17 +203,30 @@ class ClientLobbyScene(BaseMenuScene):
     def on_exit(self) -> None:
         pass
 
+    ROW_TOP = 150
+    ROW_STEP = 46
+
+    def _row_rect(self, index: int) -> pygame.Rect:
+        w, _h = self.size
+        return pygame.Rect(48, self.ROW_TOP + index * self.ROW_STEP,
+                           min(680, w - 96), 40)
+
     def build(self) -> None:
         w, h = self.size
         self.widgets = [Button((48, h - 80, 160, 42), "Verlassen", self._leave, "ghost")]
         self._dropdowns = []
-        y = 150
-        for entry in self._my_local:
-            dd = Dropdown((300, y, 220, 34), _PU_OPTIONS, entry["powerup"],
+        # Das Auswahlfeld gehoert NEBEN die eigene Zeile. Vorher standen die
+        # Felder stur ab der ersten Zeile - die eigenen Spieler stehen aber
+        # meist weiter unten, also schwebte das Feld ueber fremden Namen.
+        mine = [i for i, p in enumerate(self.remote_players)
+                if p.get("client_id") == self.cid]
+        for k, entry in enumerate(self._my_local):
+            row = self._row_rect(mine[k]) if k < len(mine) else self._row_rect(k)
+            dd = Dropdown((row.x + 300, row.y + 3, 220, 34), _PU_OPTIONS,
+                          entry["powerup"],
                           (lambda v, en=entry: self._change_powerup(en, v)))
             self.widgets.append(dd)
             self._dropdowns.append(dd)
-            y += 46
 
     def _change_powerup(self, entry, v) -> None:
         entry["powerup"] = v
@@ -267,7 +280,10 @@ class ClientLobbyScene(BaseMenuScene):
                     })
                     self._sent_hello = True
             elif t == "lobby":
+                before = [p.get("pid") for p in self.remote_players]
                 self.remote_players = msg.get("players", [])
+                if [p.get("pid") for p in self.remote_players] != before:
+                    self.build()          # Zeilen verschoben -> Felder mit
                 self.settings_wire = msg.get("settings", {})
                 self.host_name = msg.get("host", "Host")
                 self.status = f"In der Lobby von {self.host_name}. Warte auf Start ..."
@@ -308,16 +324,23 @@ class ClientLobbyScene(BaseMenuScene):
         draw_text(surf, self.app.fonts.body(16), self.status, T.TEXT_MUTED, (50, 84))
         pygame.draw.line(surf, T.BORDER, (48, 116), (w - 48, 116), 1)
 
-        y = 150
-        for p in self.remote_players:
-            box = pygame.Rect(48, y, min(680, w - 96), 40)
-            pygame.draw.rect(surf, T.SURFACE, box, border_radius=T.R_SM)
-            pygame.draw.rect(surf, color_for(p.get("color_index", 0)), (box.x, box.y, 6, box.h), border_radius=3)
-            mine = " (du)" if p.get("client_id") == self.cid else ""
-            draw_text(surf, self.app.fonts.body_bold(16), p.get("name", "?") + mine, T.TEXT, (box.x + 16, box.y + 4))
-            draw_text(surf, self.app.fonts.body(13), powerup_label(p.get("powerup_kind", "speed")),
-                      T.TEXT_MUTED, (box.x + 220, box.y + 6))
-            y += 46
+        for i, p in enumerate(self.remote_players):
+            box = self._row_rect(i)
+            if box.bottom > h - 150:
+                break
+            own = p.get("client_id") == self.cid
+            pygame.draw.rect(surf, T.SURFACE_ALT if own else T.SURFACE, box,
+                             border_radius=T.R_SM)
+            pygame.draw.rect(surf, color_for(p.get("color_index", 0)),
+                             (box.x, box.y, 6, box.h), border_radius=3)
+            draw_text(surf, self.app.fonts.body_bold(16),
+                      p.get("name", "?") + (" (du)" if own else ""), T.TEXT,
+                      (box.x + 16, box.y + 4))
+            if not own:
+                # Bei eigenen Zeilen steht dort das Auswahlfeld
+                draw_text(surf, self.app.fonts.body(13),
+                          powerup_label(p.get("powerup_kind", "speed")),
+                          T.TEXT_MUTED, (box.x + 310, box.y + 12))
 
         if self.settings_wire:
             sw = self.settings_wire

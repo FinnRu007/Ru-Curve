@@ -24,6 +24,11 @@ from ..base import MiniGame, Result
 
 
 class CurveGame(MiniGame):
+    goal = ("Du ziehst eine Linie hinter dir her. Beruehre keine Linie und "
+            "keinen Rand - auch nicht deine eigene. Ab und zu entsteht eine "
+            "Luecke, durch die man schluepfen kann.")
+    key_help = ("nach links lenken", "Powerup einsetzen", "nach rechts lenken")
+    scoring_help = "nach ueberlebter Zeit. Wer zuletzt faehrt, gewinnt."
     id = "curve"
     name = "Achtung die Kurve"
     rules = "Lenke mit links und rechts, weiche allen Linien aus. Wer am laengsten lebt, gewinnt."
@@ -31,12 +36,22 @@ class CurveGame(MiniGame):
     scoring = "high"                 # ueberlebte Sekunden
     live_unit = " s"
     authoritative = True
-    intro_seconds = 4.0
+    intro_seconds = 6.5
     max_seconds = 95.0
 
     @staticmethod
-    def make_config(rng, players):
-        return {"seed": rng.randrange(1 << 30)}
+    def make_config(rng, players, area=None, settings=None):
+        """Die Spielfeldmasse legt der HOST fest und schickt sie mit.
+
+        Sonst rechnet jeder Rechner sie aus seinem eigenen Fenster aus - dann
+        stimmen Waende und Koordinaten nicht ueberein, und der Mitspieler
+        sieht eine ganz andere Karte.
+        """
+        cfg = {"seed": rng.randrange(1 << 30)}
+        if area is not None and settings is not None:
+            aw, ah = settings.arena_dims(max(320, area.w), max(240, area.h))
+            cfg["aw"], cfg["ah"] = int(aw), int(ah)
+        return cfg
 
     # ------------------------------------------------------------------ #
     def __init__(self, ctx):
@@ -51,6 +66,7 @@ class CurveGame(MiniGame):
         self._bot_frame = 0
         self._pending_seg: list = []
         self._death_time: dict[int, float] = {}
+        self._death_order: list[int] = []      # in dieser Reihenfolge raus
         self._remote_input: dict[int, tuple] = {}
         self._last_sent = None
         self.sim_time = 0.0
@@ -62,12 +78,30 @@ class CurveGame(MiniGame):
             self._build_world()
         self._build_view()
 
+    # Im Turnier soll eine Runde flott sein. Die normale Einstellung ist auf
+    # ein ganzes Match ausgelegt; hier zaehlt eine einzelne Runde, und bei
+    # gemuetlichem Tempo passiert zu lange nichts.
+    SPEED_BOOST = 1.6
+
     def _round_settings(self):
+        """Einstellungen fuer diese Runde.
+
+        Die Spielfeldmasse kommen aus der Konfiguration des Hosts, wenn sie
+        dort stehen. Nur wenn nichts mitgeschickt wurde (alte Fassung),
+        werden sie aus dem eigenen Fenster gerechnet.
+        """
         s = self.ctx.app.config.settings
-        area = self.ctx.area
-        w, h = s.arena_dims(max(320, area.w), max(240, area.h))
-        return dataclasses.replace(s, arena_width=w, arena_height=h,
-                                   countdown_seconds=0.0)
+        w = int(self.cfg.get("aw", 0))
+        h = int(self.cfg.get("ah", 0))
+        if w < 320 or h < 240:
+            area = self.ctx.area
+            w, h = s.arena_dims(max(320, area.w), max(240, area.h))
+        # Lenkradius mitziehen: turn_rate = speed / turn_radius. Ohne das
+        # waere das Auto zwar schneller, aber genauso traege zu lenken.
+        return dataclasses.replace(
+            s, arena_width=w, arena_height=h, countdown_seconds=0.0,
+            speed=s.speed * self.SPEED_BOOST,
+            turn_radius=s.turn_radius * self.SPEED_BOOST)
 
     def _build_world(self):
         self.curves = []
@@ -184,6 +218,8 @@ class CurveGame(MiniGame):
             self.view.apply_segments(seg, self.color_map)
         for ev in w.drain_events():
             if ev[0] == "death":
+                if ev[1] not in self._death_time:
+                    self._death_order.append(ev[1])
                 self._death_time.setdefault(ev[1], w.time)
                 self.alive_flags[ev[1]] = False
                 self.ctx.play("crash")
@@ -242,10 +278,20 @@ class CurveGame(MiniGame):
     def finish(self):
         if self.ctx.is_host and self.world is not None:
             end = self.world.time
+            # Der Ueberlebende und der zuletzt Ausgeschiedene haben denselben
+            # Zeitwert - die Runde endet ja in dem Moment, in dem der vorletzte
+            # stirbt. Ohne zweiten Massstab bekamen Platz 1 und 2 immer gleich
+            # viele Punkte. Die Reihenfolge des Ausscheidens entscheidet:
+            # wer spaeter raus ist (oder ueberlebt), steht vorn.
+            order = list(self._death_order)
             for c in self.curves:
                 surv = self._death_time.get(c.id, end)
+                if c.id in order:
+                    rank = len(order) - order.index(c.id)      # frueh raus = gross
+                else:
+                    rank = 0                                    # ueberlebt
                 self.results_map[c.id] = Result(
-                    raw=round(surv, 3), time=0.0,
+                    raw=round(surv, 3), time=float(rank),
                     detail="%.1f s" % surv, done=True)
         super().finish()
 

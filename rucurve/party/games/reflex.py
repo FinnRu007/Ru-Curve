@@ -45,6 +45,11 @@ def _keycaps(game, surf, area, highlight=None, pressed=None):
 
 # =========================================================================== #
 class ReactionGame(MiniGame):
+    goal = ("Eine deiner drei Tasten leuchtet auf. Druecke genau diese so "
+            "schnell wie moeglich - aber warte, bis sie wirklich leuchtet.")
+    key_help = ("wenn links leuchtet", "wenn Mitte leuchtet", "wenn rechts leuchtet")
+    scoring_help = ("nach Reaktionszeit ueber alle Durchgaenge. Zu frueh "
+                    "gedrueckt zaehlt als Fehlversuch.")
     id = "reaction"
     name = "Reaktion"
     rules = "Sobald eine Taste aufleuchtet: druecke genau diese! Zu frueh zaehlt als Fehler."
@@ -54,7 +59,7 @@ class ReactionGame(MiniGame):
     penalty = 1.6
 
     @staticmethod
-    def make_config(rng, players):
+    def make_config(rng, players, area=None, settings=None):
         return {
             "rounds": [
                 {"delay": round(rng.uniform(1.1, 3.0), 2), "btn": rng.randrange(3)}
@@ -181,6 +186,10 @@ class ReactionGame(MiniGame):
 
 # =========================================================================== #
 class SequenceGame(MiniGame):
+    goal = ("Eine Tastenfolge wird vorgespielt. Druecke sie danach in "
+            "derselben Reihenfolge nach. Jede Stufe wird eine Taste laenger.")
+    key_help = ("erste Taste", "zweite Taste", "dritte Taste")
+    scoring_help = "nach der laengsten Folge, die du fehlerfrei geschafft hast."
     id = "sequence"
     name = "Merken"
     rules = "Merke dir die Reihenfolge der Tasten und druecke sie nach. Es wird immer laenger."
@@ -189,7 +198,7 @@ class SequenceGame(MiniGame):
     max_level = 8
 
     @staticmethod
-    def make_config(rng, players):
+    def make_config(rng, players, area=None, settings=None):
         return {"seq": [rng.randrange(3) for _ in range(SequenceGame.max_level)],
                 "bot_seed": rng.randrange(1 << 30)}
 
@@ -338,6 +347,10 @@ class SequenceGame(MiniGame):
 
 # =========================================================================== #
 class MashGame(MiniGame):
+    goal = ("Acht Sekunden lang so schnell wie moeglich auf deine Tasten "
+            "hauen. Alle drei zaehlen - abwechselnd geht meist schneller.")
+    key_help = ("zaehlt", "zaehlt", "zaehlt")
+    scoring_help = "je Tastendruck einer. Wer am meisten schafft, gewinnt."
     id = "mash"
     name = "Haemmern"
     rules = "Haemmere so schnell du kannst auf deine drei Tasten!"
@@ -346,7 +359,7 @@ class MashGame(MiniGame):
     play_seconds = 8.0
 
     @staticmethod
-    def make_config(rng, players):
+    def make_config(rng, players, area=None, settings=None):
         return {"seconds": MashGame.play_seconds, "bot_seed": rng.randrange(1 << 30)}
 
     def __init__(self, ctx):
@@ -403,20 +416,40 @@ class MashGame(MiniGame):
         U.timer_bar(surf, (area.centerx - 220, area.y + 66, 440, 12),
                     left / self.seconds)
 
-        locals_ = self.ctx.local_players
-        if not locals_:
+        # Auch die echten Mitspieler von anderen Rechnern zeigen - beim
+        # Haemmern ist der Balkenvergleich ja der ganze Witz. Wieviele
+        # dazupassen, haengt an der Breite: unter 110 px je Balken wird es
+        # unleserlich, dann bleiben nur die eigenen Leute stehen.
+        own_ids = set(self.ctx.local_pids)
+        shown = self.ctx.local_players
+        extra = [p for p in self.board_players(max_extra=5)
+                 if p.pid not in own_ids]
+        while extra and (area.w - 20 * (len(shown) + len(extra) - 1)) // \
+                max(1, len(shown) + len(extra)) < 110:
+            extra.pop()
+        shown = list(shown) + extra
+        if not shown:
             return
-        n = len(locals_)
+        n = len(shown)
         bw = min(150, max(80, (area.w - 20 * (n - 1)) // n))
         x = area.centerx - (bw * n + 18 * (n - 1)) // 2
         base_y = area.bottom - 90
         top = area.y + 110
-        best = max([self.count.get(p.pid, 0) for p in locals_] + [1])
-        for p in locals_:
-            c = self.count.get(p.pid, 0)
+        counts = {p.pid: (self.count.get(p.pid, 0) if p.pid in own_ids
+                          else int(self.live_all.get(p.pid, 0) or 0))
+                  for p in shown}
+        best = max(list(counts.values()) + [1])
+        for p in shown:
+            c = counts.get(p.pid, 0)
             h = int((base_y - top) * min(1.0, c / max(best, 1)))
             bar = pygame.Rect(x, base_y - h, bw, max(4, h))
+            mine = p.pid in own_ids
             pygame.draw.rect(surf, p.color, bar, border_radius=10)
+            if not mine:
+                # Mitspieler von woanders: nur umrandet, damit die eigenen
+                # Balken auf einen Blick zu finden bleiben.
+                pygame.draw.rect(surf, U.BG, bar.inflate(-8, -8), border_radius=8)
+                pygame.draw.rect(surf, p.color, bar, width=3, border_radius=10)
             scale = 1.0 + self.bump.get(p.pid, 0.0)
             img = fonts.display(int(30 * scale)).render(str(c), True, U.TEXT)
             surf.blit(img, img.get_rect(midbottom=(bar.centerx, bar.y - 6)))

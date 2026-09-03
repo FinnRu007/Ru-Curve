@@ -43,6 +43,8 @@ class LobbyScene(BaseMenuScene):
         # eigene Szene, damit der Host waehrenddessen weiter am Netz bleibt.
         self.picker_open = False
         self._picker_widgets: list = []
+        self._copy_note = ""            # Rueckmeldung zum Kopieren
+        self._copy_note_t = 0.0
 
     # ------------------------------------------------------------------ #
     def adopt(self, session: GameSession) -> None:
@@ -182,6 +184,31 @@ class LobbyScene(BaseMenuScene):
         for wgt in self._picker_widgets:
             wgt.draw(surf, fonts)
 
+    def share_address(self) -> str:
+        """Die Adresse, die man weitergibt - Internet bevorzugt."""
+        if self.mode != "host" or not self.host:
+            return ""
+        ip = self.public.ip if self.public else ""
+        if not ip and self.mapper:
+            ip = self.mapper.external_ip
+        if not ip:
+            ip = local_ip()
+        return "%s:%d" % (ip, self.host.port)
+
+    def copy_address(self) -> bool:
+        """Adresse in die Zwischenablage. Sagt ehrlich, ob es geklappt hat."""
+        from ..ui.clipboard import put_text
+
+        addr = self.share_address()
+        if not addr:
+            return False
+        ok = put_text(addr)
+        self._copy_note = ("%s kopiert" % addr if ok else
+                           "Kopieren ging nicht - Adresse bitte abtippen")
+        self._copy_note_t = 4.0
+        self.app.audio.play("click" if ok else "wrong")
+        return ok
+
     def _draw_net_box(self, surf, w) -> None:
         """Zeigt beide Adressen: im WLAN und uebers Internet."""
         fonts = self.app.fonts
@@ -233,6 +260,13 @@ class LobbyScene(BaseMenuScene):
         else:
             draw_text(surf, fonts.body(14), "wird ermittelt ...", T.TEXT_MUTED,
                       (box.x + 14, box.y + 70))
+
+        if self._copy_note:
+            draw_text(surf, fonts.body_bold(12), self._copy_note, T.OK,
+                      (box.x + 14, box.bottom + 4))
+        else:
+            draw_text(surf, fonts.body(12), "Strg+C kopiert die Adresse",
+                      T.TEXT_MUTED, (box.x + 14, box.bottom + 4))
 
     def _draw_net_hint(self, surf, w, h) -> None:
         """Unter der Spielerliste: was tun, wenn das Internet-Spiel klemmt."""
@@ -554,6 +588,14 @@ class LobbyScene(BaseMenuScene):
             if e.type == pygame.KEYDOWN and e.key == pygame.K_ESCAPE:
                 self._back()
                 return
+            # Strg+C kopiert die Adresse - aber nur, wenn gerade kein
+            # Textfeld den Fokus hat, sonst kopiert man dort die Auswahl.
+            if (e.type == pygame.KEYDOWN and e.key == pygame.K_c
+                    and (e.mod & pygame.KMOD_CTRL)
+                    and not any(getattr(wd, "focused", False)
+                                for wd in self.widgets)):
+                self.copy_address()
+                return
             used = False
             for dd in self._dropdowns:
                 if dd.open and dd.handle_event(e):
@@ -566,6 +608,10 @@ class LobbyScene(BaseMenuScene):
                     break
 
     def update(self, dt: float) -> None:
+        if self._copy_note_t > 0.0:
+            self._copy_note_t -= dt
+            if self._copy_note_t <= 0.0:
+                self._copy_note = ""
         self._pump_host()
         for wgt in self.widgets:
             wgt.update(dt)

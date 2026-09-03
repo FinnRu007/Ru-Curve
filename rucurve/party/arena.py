@@ -40,7 +40,7 @@ TICK = 1.0 / 60.0
 class ArenaGame(MiniGame):
     authoritative = True
     input_mode = "keys"
-    intro_seconds = 4.0
+    intro_seconds = 6.5
 
     # -- Fahrverhalten (Unterklassen duerfen alles davon aendern) -------
     RADIUS = 26.0             # Spielerradius im Logikraum
@@ -54,7 +54,7 @@ class ArenaGame(MiniGame):
     BOUNCE_KEEP = 0.85        # Tempoanteil nach einem Wandstoss
 
     @staticmethod
-    def make_config(rng, players):
+    def make_config(rng, players, area=None, settings=None):
         return {"seed": rng.randrange(1 << 30)}
 
     # ------------------------------------------------------------------ #

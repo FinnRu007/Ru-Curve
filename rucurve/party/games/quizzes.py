@@ -41,20 +41,33 @@ def _spread_choices(rng, correct, rel, lo=1):
 
     Fuers Schaetzen: bei "wie viele Punkte" nuetzen dicht beieinander
     liegende Zahlen nichts, man kann sie nicht auseinanderhalten.
+
+    Zwei Dinge sind dabei wichtig:
+      * Die richtige Zahl darf **nicht immer die mittlere** der drei sein.
+        Sonst braucht man gar nicht zu schaetzen - man nimmt den Wert in der
+        Mitte und liegt jedes Mal richtig.
+      * Bei kleinen Zahlen ist unter der richtigen wenig Platz. Der zweite
+        Schritt ist deshalb kleiner als der erste, damit "beide darunter"
+        auch dann noch geht und nicht immer die Mitte uebrigbleibt.
     """
     gap = max(2, int(round(correct * rel)))
-    low = max(lo, correct - gap - rng.randint(0, max(1, gap // 4)))
-    high = correct + gap + rng.randint(0, max(1, gap // 4))
-    if low == correct:
-        low = max(lo, correct - gap)
-    if low == correct:                       # ganz kleine Zahlen
-        high2 = correct + 2 * gap
-        out = [correct, high, high2]
-    else:
-        out = [low, correct, high]
+    step = max(2, int(round(gap * 0.7)))
+
+    shapes = ["mitte", "oben"]
+    if correct - gap - step >= lo:
+        shapes.append("unten")
+    shape = rng.choice(shapes)
+
+    if shape == "unten":                 # richtig ist die groesste Zahl
+        out = [correct, correct - gap, correct - gap - step]
+    elif shape == "oben":                # richtig ist die kleinste Zahl
+        out = [correct, correct + gap, correct + gap + step]
+    else:                                # richtig liegt dazwischen
+        out = [correct, max(lo, correct - gap), correct + gap]
+
     out = sorted(set(out))
-    while len(out) < 3:
-        out.append(out[-1] + gap)
+    while len(out) < 3:                  # Notnagel bei winzigen Zahlen
+        out.append(out[-1] + max(2, gap))
     out = out[:3]
     rng.shuffle(out)
     return [str(o) for o in out], out.index(correct)
@@ -62,6 +75,9 @@ def _spread_choices(rng, correct, rel, lo=1):
 
 # =========================================================================== #
 class MathQuiz(QuizGame):
+    goal = ("Zehn Rechenaufgaben, je fuenf Sekunden. Unten stehen drei "
+            "Antworten - jede liegt auf einer deiner drei Tasten.")
+    key_help = ("linke Antwort", "mittlere Antwort", "rechte Antwort")
     id = "math"
     name = "Kopfrechnen"
     rules = "10 Aufgaben, je 5 Sekunden. Antworte mit deinen drei Tasten."
@@ -113,6 +129,10 @@ class MathQuiz(QuizGame):
 
 # =========================================================================== #
 class AreaQuiz(QuizGame):
+    goal = ("Wie gross ist die Flaeche der gezeigten Form? Rechteck, "
+            "Quadrat und Dreieck - ganz oben auch der Kreis, dann steht die "
+            "Formel dabei.")
+    key_help = ("linke Antwort", "mittlere Antwort", "rechte Antwort")
     id = "area"
     name = "Flaecheninhalt"
     rules = "Wie gross ist die Flaeche? 10 Aufgaben, je 5 Sekunden."
@@ -209,6 +229,9 @@ class AreaQuiz(QuizGame):
 
 # =========================================================================== #
 class EstimateQuiz(QuizGame):
+    goal = ("Wie viele Punkte liegen auf dem Feld? Vier Sekunden pro Bild - "
+            "genau zaehlen schafft niemand, es geht um die Groessenordnung.")
+    key_help = ("linke Antwort", "mittlere Antwort", "rechte Antwort")
     id = "estimate"
     name = "Schaetzen"
     rules = "Wie viele Punkte siehst du? 8 Aufgaben, je 4 Sekunden."
@@ -218,8 +241,13 @@ class EstimateQuiz(QuizGame):
     # Wie weit die Antworten auseinanderliegen (Anteil der richtigen Zahl).
     # Grosszuegig, denn Punkte im Feld zaehlt in 4 Sekunden niemand genau -
     # geschaetzt werden soll die Groessenordnung.
-    SPREAD = (0.60, 0.45, 0.34, 0.26)
-    RANGES = ((7, 15), (12, 25), (20, 38), (30, 55))
+    # Abstand der Antworten (Anteil der richtigen Zahl). Grosszuegig, denn
+    # Punkte zaehlt in vier Sekunden niemand genau - geschaetzt werden soll
+    # die Groessenordnung. Auf Stufe 0 bewusst nicht groesser: bei ueber 50 %
+    # passen keine zwei Ablenker mehr UNTER die richtige Zahl, und dann waere
+    # die richtige nie die groesste der drei.
+    SPREAD = (0.45, 0.38, 0.30, 0.24)
+    RANGES = ((8, 16), (12, 25), (20, 38), (30, 55))
 
     @classmethod
     def make_question(cls, rng, index, level):
@@ -258,6 +286,10 @@ class EstimateQuiz(QuizGame):
 
 # =========================================================================== #
 class OddOneQuiz(QuizGame):
+    goal = ("Ein Feld im Raster hat eine andere Farbe als alle anderen. In "
+            "welchem Drittel liegt es? Die Einteilung wechselt zwischen "
+            "senkrecht und waagerecht - schau auf die Trennlinien.")
+    key_help = ("erstes Drittel", "zweites Drittel", "drittes Drittel")
     id = "oddone"
     name = "Ausreisser finden"
     rules = "Ein Feld hat eine andere Farbe. In welchem Drittel liegt es?"
@@ -265,21 +297,34 @@ class OddOneQuiz(QuizGame):
     per_question = 4.0
 
     ROWS = (3, 4, 5, 7)
+    COLS = (6, 9, 9, 12)
     DIFF = (62, 42, 26, 15)          # Farbunterschied - kleiner = schwerer
+    # Die Einteilung wechselt: mal senkrecht, mal waagerecht. Sonst schaut
+    # man nach ein paar Runden nur noch auf drei feste Spalten.
+    SPLITS = (("senkrecht", ("links", "mitte", "rechts")),
+              ("waagerecht", ("oben", "mitte", "unten")))
 
     @classmethod
     def make_question(cls, rng, index, level):
         lv = max(0, min(3, level))
-        cols = 9
-        rows = cls.ROWS[lv]
+        cols, rows = cls.COLS[lv], cls.ROWS[lv]
+        split, labels = rng.choice(cls.SPLITS)
+        if split == "waagerecht" and rows < 3:
+            split, labels = cls.SPLITS[0]
         third = rng.randint(0, 2)
-        cx = rng.randrange(third * (cols // 3), (third + 1) * (cols // 3))
-        cy = rng.randrange(rows)
+        if split == "senkrecht":
+            step = cols // 3
+            cx = rng.randrange(third * step, min(cols, (third + 1) * step))
+            cy = rng.randrange(rows)
+        else:
+            step = rows // 3
+            cy = rng.randrange(third * step, min(rows, (third + 1) * step))
+            cx = rng.randrange(cols)
         base = rng.randrange(12)
         return {"prompt": "Wo ist das andere Feld?",
-                "options": ["links", "mitte", "rechts"], "correct": third,
+                "options": list(labels), "correct": third,
                 "cols": cols, "rows": rows, "cx": cx, "cy": cy,
-                "base": base, "diff": cls.DIFF[lv]}
+                "split": split, "base": base, "diff": cls.DIFF[lv]}
 
     def draw_question(self, surf, area, q):
         from ...colors import color_for
@@ -295,6 +340,11 @@ class OddOneQuiz(QuizGame):
                 cell = pygame.Rect(box.x + c * cw + 3, box.y + r * ch + 3, cw - 6, ch - 6)
                 col = odd if (c == q["cx"] and r == q["cy"]) else base
                 pygame.draw.rect(surf, col, cell, border_radius=8)
-        for i in range(1, 3):
-            x = box.x + i * (box.w // 3)
-            pygame.draw.line(surf, U.LINE, (x, box.y - 6), (x, box.bottom + 6), 2)
+        if q.get("split", "senkrecht") == "senkrecht":
+            for i in range(1, 3):
+                x = box.x + i * (box.w // 3)
+                pygame.draw.line(surf, U.LINE, (x, box.y - 6), (x, box.bottom + 6), 2)
+        else:
+            for i in range(1, 3):
+                y = box.y + i * (box.h // 3)
+                pygame.draw.line(surf, U.LINE, (box.x - 6, y), (box.right + 6, y), 2)

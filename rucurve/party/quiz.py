@@ -37,6 +37,9 @@ class QuizGame(MiniGame):
     per_question = 5.0
     n_questions = 10
     live_unit = " Pkt"
+    scoring_help = ("fuer jede richtige Antwort - zwischen 100 (sofort) und "
+                    "55 (kurz vor Ablauf). Tempo entscheidet also auch bei "
+                    "gleich vielen Treffern. Falsch bringt nichts.")
     MAX_POINTS = 100     # sofort geantwortet
     # Muss ueber der Haelfte von MAX_POINTS liegen: sonst waere eine einzige
     # blitzschnelle Antwort mehr wert als zwei richtige, nur langsame.
@@ -63,7 +66,7 @@ class QuizGame(MiniGame):
 
     # ------------------------------------------------------------------ #
     @classmethod
-    def make_config(cls, rng, players):
+    def make_config(cls, rng, players, area=None, settings=None):
         # Zu jedem Platz gleich ALLE Stufen mitschicken - dann kostet ein
         # Stufenwechsel spaeter keine Nachricht mit Aufgabendaten mehr.
         ladder = [[cls.make_question(rng, i, lv) for lv in range(cls.LEVELS)]

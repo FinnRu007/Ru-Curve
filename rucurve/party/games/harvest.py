@@ -26,6 +26,12 @@ SHARD = (255, 214, 120)
 
 
 class HarvestGame(ArenaGame):
+    goal = ("Sammle die blauen Kristalle ein. Ein Rammstoss schlaegt einem "
+            "anderen Kristalle aus der Hand - die Haelfte davon bekommst du "
+            "sofort, der Rest fliegt als Splitter aufs Feld.")
+    key_help = ("nach links lenken", "Rammstoss (selten!)", "nach rechts lenken")
+    scoring_help = ("je gesammeltem Kristall. Wer viel hat, verliert pro "
+                    "Treffer mehr - der Fuehrende ist Zielscheibe.")
     id = "harvest"
     name = "Ru-Ernte"
     rules = ("Sammle die blauen Kristalle. Aktionstaste = Rammstoss - wer "
@@ -38,8 +44,12 @@ class HarvestGame(ArenaGame):
     TURN_RATE = 4.0
     DASH_FACTOR = 1.85
     DASH_TIME = 0.4
-    DASH_REFILL = 0.45
-    DASH_MAX = 1.1
+    # Der Rammstoss ist hier eine Waffe, kein Fortbewegungsmittel: er soll
+    # eine bewusste Entscheidung sein, nicht etwas, das man dauernd drueckt.
+    # DASH_MAX reicht fuer genau EINEN Stoss - man kann also nichts horten -
+    # und danach dauert es rund viereinhalb Sekunden bis zum naechsten.
+    DASH_REFILL = 0.09
+    DASH_MAX = 0.45
     RADIUS = 26.0
     WALLS = "bounce"
 
@@ -125,7 +135,7 @@ class HarvestGame(ArenaGame):
         if skill > 0.62:
             leader = max((o for o in self.units.values() if o is not u),
                          key=lambda o: o["score"], default=None)
-            if (leader is not None and leader["score"] >= u["score"] + 2
+            if (leader is not None and leader["score"] >= u["score"] + 3
                     and u["dash"] >= self.DASH_TIME):
                 dist = math.hypot(leader["x"] - u["x"], leader["y"] - u["y"])
                 if dist < 520.0:

@@ -35,6 +35,11 @@ SAFE_COLOR = (150, 220, 255)
 
 
 class TagGame(ArenaGame):
+    goal = ("Die rot markierten Spieler sind die Faenger - einer je fuenf "
+            "Mitspieler. Beruehrt dich ein Faenger, bist du selbst dran.")
+    key_help = ("nach links lenken", "Sprint (Vorrat)", "nach rechts lenken")
+    scoring_help = ("fuer jede Sekunde, in der du KEIN Faenger bist. Wer viel "
+                    "gesammelt hat, wird bevorzugt gejagt.")
     id = "tag"
     name = "Ru-Jagd"
     rules = ("Die rot markierten Spieler sind die Faenger. Punkte gibt es "

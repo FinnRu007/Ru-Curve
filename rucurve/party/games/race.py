@@ -28,7 +28,7 @@ from ..base import MiniGame, Result
 LOGIC_W, LOGIC_H = 1600.0, 900.0
 SAMPLES = 240                 # Stuetzpunkte der Mittellinie
 TRACK_HALF = 88.0             # halbe Streckenbreite
-LAPS = 2
+LAPS = 4
 TICK = 1.0 / 60.0
 
 MAX_SPEED = 430.0             # px/s im Logikraum
@@ -149,6 +149,12 @@ def track_edges(center: list, half: float = TRACK_HALF):
 
 
 class RaceGame(MiniGame):
+    goal = ("Vier Runden auf der Strecke. Neben der Bahn wirst du langsam, "
+            "und Abkuerzen quer ueber das Innenfeld bringt nichts - der "
+            "Fortschritt friert dort ein, wo du die Bahn verlaesst.")
+    key_help = ("nach links lenken", "Schub (Tank)", "nach rechts lenken")
+    scoring_help = ("nach Zieleinlauf. Wer es nicht ins Ziel schafft, wird "
+                    "nach gefahrenen Runden gewertet.")
     id = "race"
     name = "Ru-Rennen"
     rules = ("Links/rechts lenken, Aktionstaste gibt Schub. %d Runden - "
@@ -157,11 +163,11 @@ class RaceGame(MiniGame):
     scoring = "high"
     live_unit = " Rd"          # gefahrene Runden
     authoritative = True
-    intro_seconds = 4.0
-    max_seconds = 95.0
+    intro_seconds = 6.5
+    max_seconds = 150.0
 
     @staticmethod
-    def make_config(rng, players):
+    def make_config(rng, players, area=None, settings=None):
         return {"seed": rng.randrange(1 << 30), "laps": LAPS}
 
     # ------------------------------------------------------------------ #

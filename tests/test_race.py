@@ -58,8 +58,9 @@ def make_game(diffs, seed=1, human=()):
     return g
 
 
-def race(diffs, seed=1, limit=95.0):
+def race(diffs, seed=1, limit=None):
     g = make_game(diffs, seed)
+    limit = limit if limit is not None else RaceGame.max_seconds + 2
     t = 0.0
     while not g.finished and t < limit:
         g.update(1 / 60.0)
@@ -121,7 +122,7 @@ def test_bots_stay_on_the_track():
     g = make_game([1.0], seed=2)
     off = 0
     t = 0.0
-    while not g.finished and t < 95:
+    while not g.finished and t < RaceGame.max_seconds + 2:
         g.update(1 / 60.0)
         t += 1 / 60.0
         if g._distance_to_center(g.cars[0]) > TRACK_HALF:
@@ -213,9 +214,14 @@ def test_progress_counts_again_after_returning_to_the_track():
 
 def test_normal_driving_is_not_slowed_by_the_shortcut_rule():
     """Die Abkuerzungssperre darf sauberes Fahren nicht ausbremsen."""
+    from rucurve.party.games.race import LAPS
+
     times = [race([1.0], seed=s)[1] for s in range(6)]
-    assert statistics.median(times) < 16.0, (
-        "starker Bot braucht ploetzlich %.1f s" % statistics.median(times))
+    med = statistics.median(times)
+    per_lap = med / LAPS
+    assert per_lap < 8.0, (
+        "starker Bot braucht %.1f s je Runde (%.1f s fuer %d Runden)"
+        % (per_lap, med, LAPS))
 
 
 def test_lost_car_gets_towed_back_to_the_track():
@@ -249,7 +255,7 @@ def test_idle_player_still_finishes_somewhere():
     for p in g.ctx.players:
         p.is_bot = False                      # niemand lenkt
     t = 0.0
-    while not g.finished and t < 95:
+    while not g.finished and t < RaceGame.max_seconds + 2:
         g.update(1 / 60.0)
         t += 1 / 60.0
     assert g.finished

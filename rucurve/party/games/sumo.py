@@ -30,6 +30,11 @@ OUTSIDE = (16, 14, 24)
 
 
 class SumoGame(ArenaGame):
+    goal = ("Alle fahren in einem Ring, der immer kleiner wird. Schubse die "
+            "anderen hinaus - wer draussen ist, bleibt draussen.")
+    key_help = ("nach links lenken", "Rammstoss", "nach rechts lenken")
+    scoring_help = ("nach ueberlebter Zeit. Wer als Letzter im Ring steht, "
+                    "gewinnt.")
     id = "sumo"
     name = "Ru-Sumo"
     rules = ("Schubse die anderen aus dem Ring. Aktionstaste = Rammstoss. "
@@ -125,6 +130,19 @@ class SumoGame(ArenaGame):
     # -- Ergebnis -------------------------------------------------------
     def score_detail(self, u):
         return "%.1f s" % u["score"]
+
+    def finish(self):
+        super().finish()
+        if not self.ctx.is_host:
+            return
+        # Der Ueberlebende und der zuletzt Hinausgeschubste haben dieselbe
+        # Zeit - beide werden im selben Schritt gewertet. Die Reihenfolge des
+        # Ausscheidens entscheidet, sonst teilen sich Platz 1 und 2 die Punkte.
+        for pid, r in self.results_map.items():
+            if pid in self.out_order:
+                r.time = float(len(self.out_order) - self.out_order.index(pid))
+            else:
+                r.time = 0.0                    # noch im Ring
 
     # -- Anzeige --------------------------------------------------------
     def draw_world(self, surf):

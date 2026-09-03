@@ -6,8 +6,11 @@ Tastatur-Minispiele kommen damit aus. Dadurch koennen beliebig viele Leute an
 einer Tastatur spielen und dieselbe Logik laeuft unveraendert uebers LAN.
 
 Ablauf eines Minispiels:
-  * Der Host wuerfelt mit `make_config(rng, players)` die Aufgaben aus und
-    schickt sie an alle. Jede Maschine baut daraus dasselbe Minispiel.
+  * Der Host wuerfelt mit `make_config(rng, players, area)` die Aufgaben aus
+    und schickt sie an alle. `area` ist der Spielbereich des HOSTS - wer
+    daraus Spielfeldmasse ableitet, muss sie hier hineinschreiben, sonst
+    rechnet jeder Rechner mit seinem eigenen Fenster und die Karte sieht
+    ueberall anders aus. Jede Maschine baut daraus dasselbe Minispiel.
   * Jede Maschine spielt es fuer ihre *eigenen* Spieler und meldet am Ende
     `results()` an den Host.
   * Der Host vergibt Punkte und verteilt die Rangliste.
@@ -118,9 +121,14 @@ class MiniGame:
     id = "base"
     name = "Minispiel"
     rules = ""
+    # Fuer den Erklaerungsschirm vor dem Spiel. `key_help` beschreibt, was
+    # die drei Tasten HIER tun - "Aktion" allein sagt niemandem etwas.
+    goal = ""                    # worum geht es? (ein, zwei Saetze)
+    key_help = ("", "", "")      # links / Aktion / rechts
+    scoring_help = ""            # wofuer gibt es Punkte?
     input_mode = "keys"          # "keys" | "mouse" | "curve"
     hotseat = False              # true -> lokale Spieler nacheinander (Maus)
-    intro_seconds = 3.5
+    intro_seconds = 6.0
     max_seconds = 60.0
     scoring = "high"             # "high" = mehr ist besser, "low" = weniger
     # authoritative: der Host rechnet fuer ALLE (z.B. Achtung die Kurve).
@@ -129,12 +137,21 @@ class MiniGame:
 
     # ------------------------------------------------------------------ #
     @staticmethod
-    def make_config(rng, players: list[PartyPlayer]) -> dict:
-        """Wird NUR auf dem Host gerufen und an alle verteilt."""
+    def make_config(rng, players: list[PartyPlayer], area=None,
+                    settings=None) -> dict:
+        """Wird NUR auf dem Host gerufen und an alle verteilt.
+
+        `area` ist der Spielbereich auf dem Bildschirm des Hosts. Alles, was
+        davon abhaengt, gehoert in die Rueckgabe - die Clients haben andere
+        Fenstergroessen.
+        """
         return {}
 
     def __init__(self, ctx: GameContext) -> None:
         self.ctx = ctx
+        # Laufender Stand ALLER Spieler, auch der an anderen Rechnern.
+        # Wird von der Turnier-Szene jeden Frame gesetzt.
+        self.live_all: dict[int, float] = {}
         self.cfg = ctx.config
         self.results_map: dict[int, Result] = {
             pid: Result() for pid in ctx.local_pids
@@ -176,6 +193,26 @@ class MiniGame:
     def live_rows(self) -> dict[int, float]:
         """Zwischenstand fuer die Live-Rangliste (Rohwert je Spieler)."""
         return {pid: r.raw for pid, r in self.results_map.items()}
+
+    def board_players(self, max_extra: int = 4) -> list:
+        """Wen der Hauptbereich zeigen soll: eigene Leute zuerst, dann die
+        besten echten Mitspieler von anderen Rechnern.
+
+        Bots bleiben draussen - die stehen in der Rangliste rechts und wuerden
+        den Platz wegnehmen, um den es hier geht.
+        """
+        own = [p for p in self.ctx.players if p.pid in self.ctx.local_pids]
+        own_ids = {p.pid for p in own}
+        remote = [p for p in self.ctx.players
+                  if p.pid not in own_ids and not p.is_bot]
+        remote.sort(key=lambda p: -float(self.live_all.get(p.pid, 0.0)))
+        return own + remote[:max(0, max_extra)]
+
+    def board_value(self, pid: int, own):
+        """Wert eines Spielers fuers Hauptfeld - eigener Stand oder Live-Wert."""
+        if pid in own:
+            return own[pid]
+        return self.live_all.get(pid)
 
     @classmethod
     def live_label(cls, value) -> str:

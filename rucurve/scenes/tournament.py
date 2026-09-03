@@ -17,7 +17,7 @@ from ..party import ui as U
 from ..party.base import GameContext, PartyPlayer, Result
 from ..party.registry import GAME_BY_ID, game_name
 from ..party.tournament import Tournament
-from ..ui.widgets import Button, draw_text, key_name
+from ..ui.widgets import Button, draw_text, key_name, wrap_text
 
 HEADER_H = 74
 SIDE_W = 300
@@ -130,7 +130,8 @@ class TournamentScene:
             self._start_game(index + 1)
             return
         seed = random.randrange(1 << 30)
-        cfg = cls.make_config(random.Random(seed), self.players)
+        cfg = cls.make_config(random.Random(seed), self.players,
+                              self.play_rect(), self.app.config.settings)
         payload = {"type": "pt_game", "i": self.tour.index, "game": gid,
                    "cfg": cfg, "seed": seed}
         self._last_payload = payload
@@ -315,6 +316,12 @@ class TournamentScene:
                 self._to_menu()
                 return
 
+    def _feed_live_to_game(self):
+        """Der laufende Stand aller Spieler gehoert auch ins Spiel selbst -
+        nur so kann es die Mitspieler von anderen Rechnern anzeigen."""
+        if self.game is not None:
+            self.game.live_all = self.live
+
     def _broadcast_live(self, dt):
         self._live_acc += dt
         if self._live_acc < 0.35 or self.game is None:
@@ -398,6 +405,7 @@ class TournamentScene:
             self.game.update(dt)
             self._sync_authoritative(dt)
             self._broadcast_live(dt)
+            self._feed_live_to_game()
             if self.game.finished:
                 self.phase = "wait"
                 self.phase_t = 0.0
@@ -544,24 +552,56 @@ class TournamentScene:
         cls = self.game_cls
         if cls is None:
             return
-        U.title(surf, fonts, cls.name, area.y + 40, size=54, center_x=area.centerx)
-        U.subtitle(surf, fonts, cls.rules, area.y + 112, size=20, center_x=area.centerx)
+        U.title(surf, fonts, cls.name, area.y + 26, size=50, center_x=area.centerx)
 
+        y = area.y + 84
+        # Ziel - der wichtigste Satz, deshalb gross und zuerst
+        goal = cls.goal or cls.rules
+        for line in wrap_text(fonts.body(21), goal, min(760, area.w - 80)):
+            img = fonts.body(21).render(line, True, U.TEXT)
+            surf.blit(img, img.get_rect(midtop=(area.centerx, y)))
+            y += 28
+        y += 10
+
+        # Was die drei Tasten hier tun
+        if any(cls.key_help):
+            img = fonts.body_bold(14).render("Deine drei Tasten", True, U.MUTED)
+            surf.blit(img, img.get_rect(midtop=(area.centerx, y)))
+            y += 22
+            cw, gap = 190, 14
+            x = area.centerx - (3 * cw + 2 * gap) // 2
+            for i in range(3):
+                box = pygame.Rect(x + i * (cw + gap), y, cw, 46)
+                U.panel(surf, box, color=U.PANEL_HI, border=U.LINE, radius=10)
+                draw_text(surf, fonts.body_bold(13), U.BTN_LABEL[i], U.MUTED,
+                          (box.x + 12, box.y + 5))
+                draw_text(surf, fonts.body(15),
+                          U.fit(fonts.body(15), cls.key_help[i], cw - 24), U.TEXT,
+                          (box.x + 12, box.y + 24))
+            y += 58
+
+        # Wofuer es Punkte gibt
+        if cls.scoring_help:
+            for line in wrap_text(fonts.body(16), "Punkte: " + cls.scoring_help,
+                                  min(700, area.w - 80)):
+                img = fonts.body(16).render(line, True, U.GOLD)
+                surf.blit(img, img.get_rect(midtop=(area.centerx, y)))
+                y += 21
+            y += 8
+
+        # Eigene Tastenbelegung, danach der Countdown
+        if cls.input_mode != "mouse":
+            y = self._draw_key_hint(surf, area, y + 4) or y
         left = max(0.0, (cls.intro_seconds - self.phase_t))
         U.countdown_number(surf, fonts, max(1, int(left) + 1),
-                           (area.centerx, area.y + 230))
-
-        if cls.input_mode == "mouse":
-            U.subtitle(surf, fonts, "Maus - jeder ist einzeln dran",
-                       area.y + 320, size=18, center_x=area.centerx)
-        else:
-            self._draw_key_hint(surf, area, area.y + 316)
+                           (area.centerx, min(area.bottom - 60, y + 46)))
 
     def _draw_key_hint(self, surf, area, y):
+        """Belegung der eigenen Spieler. Gibt das untere y zurueck."""
         fonts = self.app.fonts
         locals_ = [p for p in self.players if p.is_local and not p.is_bot]
         if not locals_:
-            return
+            return y
         n = len(locals_)
         cw = min(240, max(150, (area.w - 16 * (n - 1)) // n))
         x = area.centerx - (cw * n + 14 * (n - 1)) // 2
@@ -575,6 +615,7 @@ class TournamentScene:
                     U.key_cap(surf, fonts, (x + i * (kw + 8), y + 24, kw, 46),
                               key_name(b[i]))
             x += cw + 14
+        return y + 76
 
     def _draw_wait(self, surf):
         area = self.play_rect()

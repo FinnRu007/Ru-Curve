@@ -538,7 +538,21 @@ class KeyBindField(Widget):
 
 
 # --------------------------------------------------------------------------- #
+from .clipboard import get_text as clipboard_get      # noqa: E402
+from .clipboard import put_text as clipboard_put      # noqa: E402
+
+
 class TextInput(Widget):
+    """Einzeiliges Textfeld mit dem, was man von einem Textfeld erwartet.
+
+    Schreibmarke, Pfeiltasten, Pos1/Ende, Entf, Markieren (Umschalt +
+    Pfeile, Doppelklick, Ziehen mit der Maus) und Strg+C/V/X/A. Vorher
+    konnte man nur hinten anhaengen - eine vertippte IP-Adresse musste man
+    komplett neu tippen.
+    """
+
+    PAD = 10
+
     def __init__(self, rect, text: str, on_change, *, max_len=16, placeholder="") -> None:
         super().__init__(rect)
         self.text = text
@@ -546,39 +560,168 @@ class TextInput(Widget):
         self.max_len = max_len
         self.placeholder = placeholder
         self.focused = False
+        self.caret = len(text)          # Position der Schreibmarke
+        self.anchor = self.caret        # Anfang der Markierung
+        self._drag = False
+        self._font = None               # zuletzt benutzte Schrift (fuer Klicks)
+
+    # -- Markierung -----------------------------------------------------
+    @property
+    def sel(self):
+        a, b = sorted((self.anchor, self.caret))
+        return a, b
+
+    @property
+    def has_sel(self) -> bool:
+        return self.anchor != self.caret
+
+    def select_all(self) -> None:
+        self.anchor, self.caret = 0, len(self.text)
+
+    def _set_caret(self, pos: int, keep_sel: bool = False) -> None:
+        self.caret = max(0, min(len(self.text), pos))
+        if not keep_sel:
+            self.anchor = self.caret
+
+    def _delete_sel(self) -> bool:
+        if not self.has_sel:
+            return False
+        a, b = self.sel
+        self._commit(self.text[:a] + self.text[b:])
+        self._set_caret(a)
+        return True
+
+    def _commit(self, text: str) -> None:
+        self.text = text[:self.max_len]
+        self.on_change(self.text)
+
+    def _insert(self, chunk: str) -> None:
+        chunk = "".join(c for c in chunk if c.isprintable())
+        if not chunk:
+            return
+        self._delete_sel()
+        room = self.max_len - len(self.text)
+        chunk = chunk[:max(0, room)]
+        if not chunk:
+            return
+        at = self.caret
+        self._commit(self.text[:at] + chunk + self.text[at:])
+        self._set_caret(at + len(chunk))
+
+    # -- Maus -----------------------------------------------------------
+    def _index_at(self, x: int) -> int:
+        """Welche Stelle im Text liegt unter diesem Bildschirm-x?"""
+        font = self._font
+        if font is None:
+            return len(self.text)
+        rel = x - (self.rect.x + self.PAD)
+        best, best_d = 0, abs(rel)
+        for i in range(1, len(self.text) + 1):
+            d = abs(font.size(self.text[:i])[0] - rel)
+            if d < best_d:
+                best_d, best = d, i
+        return best
 
     def handle_event(self, e) -> bool:
         if not (self.visible and self.enabled):
             return False
+
         if e.type == pygame.MOUSEBUTTONDOWN and e.button == 1:
-            self.focused = self.rect.collidepoint(e.pos)
-            return self.focused
-        if e.type == pygame.KEYDOWN and self.focused:
-            if e.key in (pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_TAB, pygame.K_ESCAPE):
-                self.focused = False
-            elif e.key == pygame.K_BACKSPACE:
-                self.text = self.text[:-1]
-                self.on_change(self.text)
-            elif e.unicode and e.unicode.isprintable() and len(self.text) < self.max_len:
-                self.text += e.unicode
-                self.on_change(self.text)
+            inside = self.rect.collidepoint(e.pos)
+            self.focused = inside
+            if not inside:
+                self._drag = False
+                return False
+            if getattr(e, "clicks", 1) >= 2:
+                self.select_all()
+            else:
+                self._set_caret(self._index_at(e.pos[0]))
+                self._drag = True
             return True
-        return False
+        if e.type == pygame.MOUSEBUTTONUP and e.button == 1:
+            self._drag = False
+        if e.type == pygame.MOUSEMOTION and self._drag and self.focused:
+            self._set_caret(self._index_at(e.pos[0]), keep_sel=True)
+            return True
+
+        if e.type != pygame.KEYDOWN or not self.focused:
+            return False
+
+        ctrl = bool(e.mod & pygame.KMOD_CTRL)
+        shift = bool(e.mod & pygame.KMOD_SHIFT)
+
+        if ctrl and e.key == pygame.K_a:
+            self.select_all()
+        elif ctrl and e.key in (pygame.K_c, pygame.K_x):
+            a, b = self.sel
+            clipboard_put(self.text[a:b] if self.has_sel else self.text)
+            if e.key == pygame.K_x:
+                if not self._delete_sel():
+                    self._commit("")
+                    self._set_caret(0)
+        elif ctrl and e.key == pygame.K_v:
+            self._insert(clipboard_get())
+        elif e.key in (pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_TAB,
+                       pygame.K_ESCAPE):
+            self.focused = False
+        elif e.key == pygame.K_LEFT:
+            self._set_caret((self.sel[0] if self.has_sel and not shift
+                             else self.caret - 1), keep_sel=shift)
+        elif e.key == pygame.K_RIGHT:
+            self._set_caret((self.sel[1] if self.has_sel and not shift
+                             else self.caret + 1), keep_sel=shift)
+        elif e.key == pygame.K_HOME:
+            self._set_caret(0, keep_sel=shift)
+        elif e.key == pygame.K_END:
+            self._set_caret(len(self.text), keep_sel=shift)
+        elif e.key == pygame.K_BACKSPACE:
+            if not self._delete_sel() and self.caret > 0:
+                at = self.caret
+                self._commit(self.text[:at - 1] + self.text[at:])
+                self._set_caret(at - 1)
+        elif e.key == pygame.K_DELETE:
+            if not self._delete_sel() and self.caret < len(self.text):
+                at = self.caret
+                self._commit(self.text[:at] + self.text[at + 1:])
+                self._set_caret(at)
+        elif e.unicode and e.unicode.isprintable():
+            self._insert(e.unicode)
+        return True
 
     def draw(self, surf, fonts) -> None:
         if not self.visible:
             return
+        font = fonts.body(16)
+        self._font = font
         hover = self.hovered()
         pygame.draw.rect(surf, T.SURFACE_ALT if hover and not self.focused else T.BG,
                          self.rect, border_radius=T.R_SM)
         pygame.draw.rect(surf, T.ACCENT if (self.focused or hover) else T.BORDER,
                          self.rect, width=2 if self.focused else 1,
                          border_radius=T.R_SM)
-        shown = self.text or self.placeholder
-        color = T.TEXT if self.text else T.TEXT_MUTED
-        if self.focused and self.text and (pygame.time.get_ticks() // 500) % 2 == 0:
-            shown += "|"
-        draw_text(surf, fonts.body(16), shown, color, (self.rect.x + 10, self.rect.centery - 9))
+
+        x0 = self.rect.x + self.PAD
+        y0 = self.rect.centery - 9
+        prev = surf.get_clip()
+        surf.set_clip(self.rect.inflate(-4, -4))
+
+        if self.focused and self.has_sel:
+            a, b = self.sel
+            sx = x0 + font.size(self.text[:a])[0]
+            sw = font.size(self.text[a:b])[0]
+            pygame.draw.rect(surf, T.ACCENT_SOFT,
+                             (sx, self.rect.y + 5, sw, self.rect.h - 10))
+
+        if self.text:
+            draw_text(surf, font, self.text, T.TEXT, (x0, y0))
+        elif self.placeholder:
+            draw_text(surf, font, self.placeholder, T.TEXT_MUTED, (x0, y0))
+
+        if self.focused and (pygame.time.get_ticks() // 500) % 2 == 0:
+            cx = x0 + font.size(self.text[:self.caret])[0]
+            pygame.draw.line(surf, T.TEXT, (cx, self.rect.y + 6),
+                             (cx, self.rect.bottom - 6), 2)
+        surf.set_clip(prev)
 
 
 # --------------------------------------------------------------------------- #

@@ -56,132 +56,271 @@ def _tone(freq, dur, kind="sine"):
 
 
 # --------------------------------------------------------------------------- #
+#  Klangwerkzeuge
+#
+#  Die erste Fassung der Sounds war schlicht zu laut und zu schrill. Gemessen:
+#  Spitzen bis 0.50, und beim Anpfiff lagen 75 % der Energie ueber 2 kHz -
+#  genau der Bereich, der im Ohr weh tut. Dazu Einsaetze von unter 2 ms, die
+#  als Knacken hoerbar sind, und Rechteckwellen mit ihren harten Obertoenen.
+#
+#  Die Werkzeuge hier drehen genau daran:
+#    * `_lowpass`  nimmt die Schaerfe raus
+#    * `_soft_env` gibt jedem Ton einen weichen Einsatz statt eines Knacks
+#    * `_partials` baut Klaenge additiv mit schnell abfallenden Obertoenen
+#    * `_space`    haengt ein paar leise Wiederholungen an - klingt weiter weg
+#    * `_finish`   setzt am Ende einen festen, niedrigen Spitzenpegel
+# --------------------------------------------------------------------------- #
+def _lowpass(x: np.ndarray, cutoff: float, order: int = 2) -> np.ndarray:
+    """Einfacher Tiefpass (mehrfach angewandtes Ein-Pol-Filter)."""
+    dt = 1.0 / SR
+    rc = 1.0 / (2 * np.pi * max(20.0, cutoff))
+    a = dt / (rc + dt)
+    out = x
+    for _ in range(max(1, order)):
+        y = np.empty_like(out)
+        acc = 0.0
+        for i in range(len(out)):          # bewusst schlicht: laeuft einmalig
+            acc += a * (out[i] - acc)
+            y[i] = acc
+        out = y
+    return out
+
+
+def _soft_env(n: int, attack=0.012, hold=0.0, curve=3.0) -> np.ndarray:
+    """Weicher Einsatz, danach exponentiell abfallend.
+
+    Der Einsatz laeuft ueber eine Kosinusflanke - linear reicht nicht, man
+    hoert die Ecke am Ende der Rampe noch als leises Knacken.
+    """
+    e = np.ones(n)
+    a = min(n, int(SR * attack))
+    if a > 1:
+        e[:a] = 0.5 - 0.5 * np.cos(np.linspace(0, np.pi, a))
+    h = min(n - a, int(SR * hold))
+    rest = n - a - h
+    if rest > 0:
+        e[a + h:] = np.exp(-curve * np.linspace(0, 1, rest))
+    return e
+
+
+def _partials(freq, dur, amps=(1.0, 0.28, 0.10), detune=0.0):
+    """Additiver Ton. Die Obertoene fallen bewusst schnell ab."""
+    t = np.linspace(0, dur, int(SR * dur), endpoint=False)
+    out = np.zeros_like(t)
+    for k, amp in enumerate(amps, start=1):
+        out += amp * np.sin(2 * np.pi * freq * k * t)
+        if detune:
+            out += amp * 0.5 * np.sin(2 * np.pi * freq * k * (1 + detune) * t)
+    return out / (np.max(np.abs(out)) + 1e-9)
+
+
+def _glide(f0, f1, dur, curve=1.0):
+    """Gleitender Ton von f0 nach f1 - ohne Phasenspruenge."""
+    n = int(SR * dur)
+    t = np.linspace(0, dur, n, endpoint=False)
+    f = f0 + (f1 - f0) * (t / dur) ** curve
+    phase = 2 * np.pi * np.cumsum(f) / SR
+    return np.sin(phase)
+
+
+def _space(x: np.ndarray, amount=0.25, taps=((0.055, 0.6), (0.11, 0.35),
+                                             (0.19, 0.18))):
+    """Ein paar leise Wiederholungen - laesst den Klang weicher wirken."""
+    out = np.copy(x)
+    extra = int(SR * 0.35)
+    out = np.concatenate([out, np.zeros(extra)])
+    for delay, gain in taps:
+        d = int(SR * delay)
+        if d < len(out):
+            out[d:d + len(x)] += x * gain * amount
+    return out
+
+
+def _finish(m: np.ndarray, peak: float) -> np.ndarray:
+    """Auf einen festen Spitzenpegel bringen und die Enden sauber ausblenden."""
+    m = np.asarray(m, dtype=float)
+    top = np.max(np.abs(m))
+    if top > 1e-9:
+        m = m * (peak / top)
+    edge = min(len(m) // 8, int(SR * 0.008))
+    if edge > 1:
+        m[:edge] *= np.linspace(0, 1, edge)
+        m[-edge:] *= np.linspace(1, 0, edge)
+    return m
+
+
+def _seq(notes, gap=0.0):
+    """Toene hintereinander, mit optionaler Ueberlappung (gap < 0)."""
+    if gap >= 0:
+        parts = []
+        for i, nte in enumerate(notes):
+            parts.append(nte)
+            if gap and i < len(notes) - 1:
+                parts.append(np.zeros(int(SR * gap)))
+        return np.concatenate(parts)
+    step = int(SR * -gap)
+    total = sum(len(n) for n in notes) - step * (len(notes) - 1)
+    out = np.zeros(max(total, 1))
+    pos = 0
+    for nte in notes:
+        out[pos:pos + len(nte)] += nte
+        pos += max(1, len(nte) - step)
+    return out
+
+
+# --------------------------------------------------------------------------- #
+#  Die einzelnen Klaenge - alle bewusst leise und ohne scharfe Hoehen
+# --------------------------------------------------------------------------- #
 def sfx_click():
-    m = _tone(1250, 0.05) * _env(int(SR * 0.05), 0.002, 0.045) * 0.35
-    _write_wav(os.path.join(SND, "click.wav"), _stereo(m))
+    """Klick im Menue. Soll man kaum bemerken."""
+    d = 0.045
+    m = _partials(520, d, (1.0, 0.22)) * _soft_env(int(SR * d), 0.006, curve=6)
+    _write_wav(os.path.join(SND, "click.wav"),
+               _stereo(_finish(_lowpass(m, 2400), 0.11)))
 
 
 def sfx_countdown():
-    m = _tone(680, 0.13) * _env(int(SR * 0.13), 0.005, 0.1) * 0.4
-    _write_wav(os.path.join(SND, "countdown.wav"), _stereo(m))
+    """Drei, zwei, eins - ein warmer Ton, kein Piepen."""
+    d = 0.16
+    m = _partials(392, d, (1.0, 0.25, 0.08)) * _soft_env(int(SR * d), 0.012, 0.03)
+    _write_wav(os.path.join(SND, "countdown.wav"),
+               _stereo(_finish(_lowpass(m, 2000), 0.14)))
 
 
 def sfx_go():
-    n = int(SR * 0.35)
-    e = _env(n, 0.005, 0.28)
-    m = (_tone(880, 0.35) + 0.6 * _tone(1320, 0.35)) * e * 0.33
-    _write_wav(os.path.join(SND, "go.wav"), _stereo(m))
+    """Los! Zwei Toene aufwaerts, ineinander uebergehend."""
+    a = _partials(523.25, 0.16, (1.0, 0.3, 0.1)) * _soft_env(int(SR * 0.16), 0.01, 0.02)
+    b = _partials(783.99, 0.34, (1.0, 0.26, 0.08)) * _soft_env(int(SR * 0.34), 0.014, 0.04)
+    m = _space(_seq([a, b], gap=-0.05), 0.22)
+    _write_wav(os.path.join(SND, "go.wav"),
+               _stereo(_finish(_lowpass(m, 2600), 0.17)))
 
 
 def sfx_powerup():
-    dur = 0.28
-    t = np.linspace(0, dur, int(SR * dur), endpoint=False)
-    sweep = np.sin(2 * np.pi * (240 + (900 - 240) * (t / dur) ** 1.5) * t)
-    m = sweep * _env(len(t), 0.005, 0.2) * 0.35
-    _write_wav(os.path.join(SND, "powerup.wav"), _stereo(m))
+    """Powerup: sanft aufwaerts gleitend, mit leichtem Schweben."""
+    d = 0.34
+    t = np.linspace(0, d, int(SR * d), endpoint=False)
+    m = _glide(330, 660, d, curve=1.4) * (1.0 + 0.12 * np.sin(2 * np.pi * 6 * t))
+    m += 0.25 * _glide(660, 1320, d, curve=1.4)
+    m *= _soft_env(len(t), 0.018, 0.05, curve=3.5)
+    _write_wav(os.path.join(SND, "powerup.wav"),
+               _stereo(_finish(_lowpass(m, 2600), 0.14)))
 
 
 def sfx_crash():
-    dur = 0.35
-    n = int(SR * dur)
+    """Zusammenstoss. Faellt bei Sumo und Ernte staendig an - deshalb kurz,
+    dumpf und leise. Ein heller Knall waere hier eine Zumutung."""
+    d = 0.20
+    n = int(SR * d)
     rng = np.random.default_rng(7)
-    noise = rng.uniform(-1, 1, n)
-    # simpler Tiefpass
-    for _ in range(4):
-        noise = np.convolve(noise, np.ones(6) / 6, mode="same")
-    t = np.linspace(0, dur, n, endpoint=False)
-    thud = np.sin(2 * np.pi * np.linspace(180, 60, n) * t)
-    m = (0.7 * noise + 0.6 * thud) * _env(n, 0.001, 0.32) * 0.5
-    _write_wav(os.path.join(SND, "crash.wav"), _stereo(m))
+    noise = _lowpass(rng.uniform(-1, 1, n), 600, order=3)
+    t = np.linspace(0, d, n, endpoint=False)
+    thump = np.sin(2 * np.pi * np.cumsum(np.linspace(120, 55, n)) / SR)
+    m = (0.55 * noise / (np.max(np.abs(noise)) + 1e-9) + 0.9 * thump)
+    m *= _soft_env(n, 0.004, 0.01, curve=5.0)
+    _write_wav(os.path.join(SND, "crash.wav"),
+               _stereo(_finish(_lowpass(m, 900), 0.16)))
 
 
 def sfx_win():
-    notes = [523.25, 659.25, 783.99, 1046.5]
-    parts = []
-    for i, f in enumerate(notes):
-        d = 0.16 if i < 3 else 0.4
-        parts.append(_tone(f, d) * _env(int(SR * d), 0.005, d * 0.8) * 0.33)
-    _write_wav(os.path.join(SND, "win.wav"), _stereo(np.concatenate(parts)))
+    """Rundensieg: ein ruhiger Dreiklang mit Nachhall."""
+    notes = []
+    for f, d in ((523.25, 0.18), (659.25, 0.18), (783.99, 0.18), (1046.5, 0.5)):
+        notes.append(_partials(f, d, (1.0, 0.3, 0.09))
+                     * _soft_env(int(SR * d), 0.014, 0.04, curve=3.0))
+    m = _space(_seq(notes, gap=-0.04), 0.3)
+    _write_wav(os.path.join(SND, "win.wav"),
+               _stereo(_finish(_lowpass(m, 2600), 0.18)))
 
 
 # --------------------------------------------------------------------------- #
-#  Turnier-Sounds
-# --------------------------------------------------------------------------- #
-def _brass(freq, dur, detune=0.004):
-    """Trompeten-artiger Ton: Saegezahn-Obertoene + leichtes Vibrato."""
+def _horn(freq, dur, detune=0.005):
+    """Weiches Blasinstrument. Die alte Fassung hatte sechs Obertoene in
+    voller Staerke - das klang nach Blechtrompete direkt am Ohr. Drei
+    reichen, und sie fallen deutlich schneller ab."""
     t = np.linspace(0, dur, int(SR * dur), endpoint=False)
-    vib = 1.0 + 0.006 * np.sin(2 * np.pi * 5.5 * t)
+    vib = 1.0 + 0.004 * np.sin(2 * np.pi * 5.0 * t)
     out = np.zeros_like(t)
-    for k, amp in enumerate((1.0, 0.62, 0.42, 0.26, 0.16, 0.09), start=1):
+    for k, amp in enumerate((1.0, 0.34, 0.13, 0.05), start=1):
         out += amp * np.sin(2 * np.pi * freq * k * vib * t)
-        out += amp * 0.5 * np.sin(2 * np.pi * freq * k * (1 + detune) * t)
+        out += amp * 0.4 * np.sin(2 * np.pi * freq * k * (1 + detune) * t)
     out /= np.max(np.abs(out)) + 1e-9
-    # weicher Anblas-Einsatz
-    att = int(SR * min(0.05, dur * 0.25))
-    env = np.ones_like(t)
-    env[:att] = np.linspace(0, 1, att) ** 0.6
-    rel = int(SR * min(0.18, dur * 0.5))
-    env[-rel:] *= np.linspace(1, 0, rel) ** 1.4
+    env = _soft_env(len(t), min(0.045, dur * 0.3), hold=dur * 0.35, curve=2.4)
     return out * env
 
 
 def sfx_fanfare():
-    """Kurze Trompeten-Fanfare fuer Ergebnisse und den Turniersieg."""
+    """Fanfare fuer Ergebnisse und den Turniersieg - warm statt schmetternd."""
     g, c, e = 392.00, 523.25, 659.25
-    parts = [
-        _brass(g, 0.15), _brass(g, 0.13), _brass(g, 0.13),
-        _brass(c, 0.30), _brass(e, 0.22), _brass(c * 1.5, 0.60),
-    ]
-    m = np.concatenate(parts) * 0.40
-    _write_wav(os.path.join(SND, "fanfare.wav"), _stereo(m))
+    parts = [_horn(g, 0.18), _horn(g, 0.16), _horn(g, 0.16),
+             _horn(c, 0.34), _horn(e, 0.26), _horn(c * 1.5, 0.72)]
+    m = _space(_seq(parts, gap=-0.03), 0.35)
+    _write_wav(os.path.join(SND, "fanfare.wav"),
+               _stereo(_finish(_lowpass(m, 2200), 0.19)))
 
 
 def sfx_whistle():
-    """Anpfiff - kurzer Triller."""
-    dur = 0.55
-    t = np.linspace(0, dur, int(SR * dur), endpoint=False)
-    trill = 2100 + 120 * np.sin(2 * np.pi * 22 * t)
-    m = np.sin(2 * np.pi * trill * t) + 0.35 * np.sin(2 * np.pi * 2 * trill * t)
-    rng = np.random.default_rng(3)
-    m += 0.10 * rng.uniform(-1, 1, len(t))
-    m *= _env(len(t), 0.02, 0.16) * 0.30
-    _write_wav(os.path.join(SND, "whistle.wav"), _stereo(m))
+    """Anpfiff. Faellt bei der Jagd bei JEDEM Fangen an - die alte Fassung
+    lag mit 2100 Hz plus Oberton genau im schmerzhaften Bereich (75 % der
+    Energie ueber 2 kHz). Jetzt tiefer, kurz und ohne Rauschanteil."""
+    d = 0.26
+    t = np.linspace(0, d, int(SR * d), endpoint=False)
+    f = 880 + 40 * np.sin(2 * np.pi * 11 * t)
+    m = np.sin(2 * np.pi * np.cumsum(f) / SR)
+    m += 0.18 * np.sin(2 * np.pi * np.cumsum(f * 1.5) / SR)
+    m *= _soft_env(len(t), 0.02, 0.06, curve=4.0)
+    _write_wav(os.path.join(SND, "whistle.wav"),
+               _stereo(_finish(_lowpass(m, 1800), 0.13)))
 
 
 def sfx_tick():
-    m = _tone(1750, 0.035, "square") * _env(int(SR * 0.035), 0.001, 0.03) * 0.16
-    _write_wav(os.path.join(SND, "tick.wav"), _stereo(m))
+    """Sekundenticken - so leise wie moeglich, es laeuft im Hintergrund mit."""
+    d = 0.03
+    m = _partials(660, d, (1.0, 0.15)) * _soft_env(int(SR * d), 0.004, curve=7)
+    _write_wav(os.path.join(SND, "tick.wav"),
+               _stereo(_finish(_lowpass(m, 1800), 0.07)))
 
 
 def sfx_correct():
-    parts = [_tone(880, 0.09), _tone(1318.5, 0.16)]
-    m = np.concatenate([p * _env(len(p), 0.004, len(p) / SR * 0.7) for p in parts]) * 0.32
-    _write_wav(os.path.join(SND, "correct.wav"), _stereo(m))
+    """Richtig geantwortet: zwei freundliche Toene aufwaerts."""
+    a = _partials(659.25, 0.10, (1.0, 0.22)) * _soft_env(int(SR * 0.10), 0.008, 0.02)
+    b = _partials(987.77, 0.20, (1.0, 0.18)) * _soft_env(int(SR * 0.20), 0.010, 0.03)
+    m = _seq([a, b], gap=-0.03)
+    _write_wav(os.path.join(SND, "correct.wav"),
+               _stereo(_finish(_lowpass(m, 2400), 0.13)))
 
 
 def sfx_wrong():
-    m = _tone(196, 0.24, "square") * _env(int(SR * 0.24), 0.004, 0.2) * 0.26
-    _write_wav(os.path.join(SND, "wrong.wav"), _stereo(m))
+    """Falsch: zwei tiefe Toene abwaerts. Bewusst KEIN Rechteck mehr - dessen
+    harte Obertoene waren fast die Haelfte der Energie."""
+    a = _partials(261.63, 0.13, (1.0, 0.2)) * _soft_env(int(SR * 0.13), 0.010, 0.02)
+    b = _partials(196.00, 0.26, (1.0, 0.16)) * _soft_env(int(SR * 0.26), 0.012, 0.04)
+    m = _seq([a, b], gap=-0.02)
+    _write_wav(os.path.join(SND, "wrong.wav"),
+               _stereo(_finish(_lowpass(m, 1300), 0.12)))
 
 
 def sfx_applause():
-    """Applaus: gefilterte Rauschstoesse."""
-    dur = 1.8
-    n = int(SR * dur)
+    """Applaus: bandbegrenztes Rauschen. Ungefiltert klingt es wie Zischen -
+    echtes Klatschen hat kaum Energie ueber 2 kHz."""
+    d = 1.5
+    n = int(SR * d)
     rng = np.random.default_rng(11)
-    noise = rng.uniform(-1, 1, n)
-    for _ in range(2):
-        noise = np.convolve(noise, np.ones(4) / 4, mode="same")
+    noise = _lowpass(rng.uniform(-1, 1, n), 1600, order=2)
+    noise = noise - _lowpass(noise, 220, order=1)      # Tiefen weg
     claps = np.zeros(n)
     pos = 0
     while pos < n:
-        w = rng.integers(200, 900)
+        w = int(rng.integers(300, 1100))
         end = min(n, pos + w)
-        claps[pos:end] += noise[pos:end] * rng.uniform(0.4, 1.0)
-        pos += int(rng.integers(300, 1400))
-    swell = np.minimum(1.0, np.linspace(0, 3, n)) * np.linspace(1, 0.2, n)
-    m = claps * swell * 0.30
-    _write_wav(os.path.join(SND, "applause.wav"), _stereo(m))
+        seg = noise[pos:end] * rng.uniform(0.35, 1.0)
+        fade = np.linspace(1.0, 0.0, len(seg)) ** 1.5
+        claps[pos:end] += seg * fade
+        pos += int(rng.integers(400, 1500))
+    swell = np.minimum(1.0, np.linspace(0, 4, n)) * np.linspace(1, 0.15, n)
+    m = _lowpass(claps * swell, 1800)
+    _write_wav(os.path.join(SND, "applause.wav"),
+               _stereo(_finish(m, 0.15)))
 
 
 # --------------------------------------------------------------------------- #
