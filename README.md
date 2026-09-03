@@ -131,7 +131,7 @@ mit.
 | 7 | **Haemmern** | Acht Sekunden lang so schnell wie moeglich auf die Tasten hauen. |
 | 8 | **Stopp!** | Einen hin- und herlaufenden Zeiger moeglichst genau in der Mitte anhalten. |
 | 9 | **Zeitgefuehl** | Druecken, wenn genau die geforderte Zeit vorbei ist - die Uhr verschwindet unterwegs. |
-| 10 | **Ru-Rennen** | Autorennen ueber zwei Runden: links/rechts lenken, Aktionstaste gibt Schub. Alle fahren gleichzeitig, Rempler kosten Tempo. |
+| 10 | **Ru-Rennen** | Autorennen ueber zwei Runden: links/rechts lenken, Aktionstaste gibt Schub. Alle fahren gleichzeitig, Rempler kosten Tempo. Abkuerzen quer ueber das Innenfeld bringt nichts - der Fortschritt friert dort ein, wo du die Bahn verlassen hast. |
 | 11 | **Achtung die Kurve** | Eine kurze Runde des Originalspiels - wer am laengsten ueberlebt, gewinnt. |
 
 Wie das ueber LAN zusammenlaeuft: der Host wuerfelt die Aufgaben aus und schickt
@@ -147,6 +147,19 @@ Eine richtige Antwort ist nicht einfach ein Punkt, sondern zwischen **100**
 richtig hat, aber schneller war, gewinnt damit klar. Falsche Antworten bringen
 nichts. Die Untergrenze liegt bewusst ueber der Haelfte: sonst waere eine
 einzige blitzschnelle Antwort mehr wert als zwei richtige.
+
+### Die Aufgaben passen sich an
+
+Jedes Quiz hat vier Schwierigkeitsstufen. Lief die letzte Aufgabe gut (70 % oder
+mehr richtig, ueber **alle** Mitspieler zusammen), wird die naechste schwerer;
+unter 34 % wird sie leichter. Die aktuelle Stufe steht ueber der Frage.
+
+Wichtig dabei: **alle sehen immer dieselbe Aufgabe.** Der Host wuerfelt zu jedem
+Aufgabenplatz gleich alle vier Stufen aus und schickt sie an alle; welche davon
+gilt, entscheidet allein der Host und gibt es weiter. Die Stufe fuer Aufgabe
+i+1 steht schon fest, waehrend Aufgabe i laeuft - eine ganze Aufgabenlaenge
+Vorlauf, damit die Entscheidung auch ueber LAN und Internet rechtzeitig
+ankommt.
 
 ## Steuerung
 
@@ -224,8 +237,10 @@ python tests/test_party.py       # ein komplettes Turnier durch alle 11 Minispie
 python tests/test_party_net.py   # Turnier ueber echte Sockets (Host + Client)
 python tests/test_lan_robust.py  # belegte Ports, Fehlermeldungen, Hostsuche
 python tests/test_party_join.py  # Lobby -> TURNIER: Mitspieler kommt wirklich mit
-python tests/test_race.py        # Ru-Rennen: Strecke, Rundenzaehlung, Bots, Rempler
+python tests/test_race.py        # Ru-Rennen: Strecke, Rundenzaehlung, Bots, Rempler, Abkuerzen
 python tests/test_speed_and_updates.py  # Tempo-Wertung, Update-Hinweis, Startanimation
+python tests/test_adaptive.py    # Schwierigkeitsstufen - und dass alle dieselbe Aufgabe sehen
+python tests/test_hover.py       # jedes anklickbare Element markiert sich unter der Maus
 python tests/shots.py            # rendert alle Szenen als PNG nach tests/_shots/
 python tests/shots_party.py      # rendert jedes Minispiel nach tests/_shots_party/
 ```

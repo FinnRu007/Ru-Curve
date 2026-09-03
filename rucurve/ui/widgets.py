@@ -56,11 +56,73 @@ def key_name(code: int) -> str:
 
 
 # --------------------------------------------------------------------------- #
+# Merkt sich pro Bild, ob die Maus ueber etwas Anklickbarem steht - daraus
+# macht app.py den Handzeiger.
+_hover_seen = False
+
+
+def note_hover() -> None:
+    global _hover_seen
+    _hover_seen = True
+
+
+def take_hover() -> bool:
+    """Gab es seit dem letzten Aufruf etwas unter der Maus? (setzt zurueck)"""
+    global _hover_seen
+    was, _hover_seen = _hover_seen, False
+    return was
+
+
+# Solange ein Scroll-Bereich zeichnet, gilt nur der sichtbare Ausschnitt:
+# eine Zeile, die oben aus dem Bereich herausragt, darf nicht auf Hover
+# reagieren, obwohl ihr Rechteck die Maus enthaelt.
+_clip = None
+
+
+def set_hover_clip(rect) -> None:
+    global _clip
+    _clip = pygame.Rect(rect) if rect is not None else None
+
+
+def hover_here(rect) -> bool:
+    """Fuer Elemente, die nicht von Widget erben (eigene Kopfzeilen usw.)."""
+    pos = pygame.mouse.get_pos()
+    if not pygame.Rect(rect).collidepoint(pos):
+        return False
+    if _clip is not None and not _clip.collidepoint(pos):
+        return False
+    note_hover()
+    return True
+
+
+def hover_tint(base, amount: int = 18):
+    """Farbe fuers Ueberfahren - hell wird heller, dunkel wird heller."""
+    return tuple(max(0, min(255, c + amount)) for c in base[:3])
+
+
 class Widget:
     def __init__(self, rect) -> None:
         self.rect = pygame.Rect(rect)
         self.visible = True
         self.enabled = True
+
+    def hovered(self, rect=None) -> bool:
+        """Steht die Maus darueber?
+
+        Wird beim Zeichnen gefragt und nicht aus MOUSEMOTION gefuettert: so
+        stimmt die Markierung auch, wenn sich das Fenster oder die Liste
+        aendert, ohne dass die Maus bewegt wird.
+        """
+        if not (self.visible and self.enabled):
+            return False
+        r = self.rect if rect is None else rect
+        pos = pygame.mouse.get_pos()
+        if not r.collidepoint(pos):
+            return False
+        if _clip is not None and not _clip.collidepoint(pos):
+            return False
+        note_hover()
+        return True
 
     def handle_event(self, e) -> bool:
         return False
@@ -94,7 +156,7 @@ class Button(Widget):
     def draw(self, surf, fonts) -> None:
         if not self.visible:
             return
-        hover = self._hover and self.enabled
+        hover = self.hovered()
         if self.kind == "primary":
             bg = T.ACCENT_DARK if hover else T.ACCENT
             fg = (255, 255, 255)
@@ -179,12 +241,16 @@ class Slider(Widget):
         if not self.visible:
             return
         cy = self.rect.centery
+        hover = self.hovered(self.rect.inflate(0, 18)) or self._drag
         pygame.draw.line(surf, T.BORDER, (self.rect.x, cy), (self.rect.right, cy), 4)
         t = (self.value - self.lo) / max(1e-9, self.hi - self.lo)
         hx = int(self.rect.x + t * self.rect.w)
         pygame.draw.line(surf, T.ACCENT, (self.rect.x, cy), (hx, cy), 4)
-        pygame.draw.circle(surf, T.ACCENT, (hx, cy), 9)
-        pygame.draw.circle(surf, (255, 255, 255), (hx, cy), 4)
+        if hover:
+            pygame.draw.circle(surf, T.ACCENT_SOFT, (hx, cy), 14)
+        pygame.draw.circle(surf, T.ACCENT_DARK if hover else T.ACCENT, (hx, cy),
+                           11 if hover else 9)
+        pygame.draw.circle(surf, (255, 255, 255), (hx, cy), 5 if hover else 4)
 
 
 # --------------------------------------------------------------------------- #
@@ -267,12 +333,29 @@ class NumberField(Widget):
     def draw(self, surf, fonts) -> None:
         if not self.visible:
             return
-        pygame.draw.rect(surf, T.BG, self.rect, border_radius=T.R_SM)
-        pygame.draw.rect(surf, T.ACCENT if self.focused else T.BORDER, self.rect, width=1, border_radius=T.R_SM)
+        hover = self.hovered()
+        pygame.draw.rect(surf, T.SURFACE_ALT if hover and not self.focused else T.BG,
+                         self.rect, border_radius=T.R_SM)
+        if self.focused:
+            border, width = T.ACCENT, 2
+        elif hover:
+            border, width = T.ACCENT, 1
+        else:
+            border, width = T.BORDER, 1
+        pygame.draw.rect(surf, border, self.rect, width=width, border_radius=T.R_SM)
         txt = self._text if self.focused else self._fmt()
         draw_text(surf, fonts.body(17), txt, T.TEXT, (self.rect.x + 10, self.rect.centery - 9))
         for r, arrow in ((self._btn_up, "▲"), (self._btn_dn, "▼")):
-            draw_text(surf, fonts.body(10), arrow, T.TEXT_MUTED, r.center, center=True)
+            # Die beiden Pfeilfelder markieren sich einzeln - man soll sehen,
+            # welches von beiden man gerade trifft.
+            if self.hovered(r):
+                pygame.draw.rect(surf, T.ACCENT_SOFT, r.inflate(-3, -3),
+                                 border_radius=6)
+                draw_text(surf, fonts.body(10), arrow, T.ACCENT_DARK, r.center,
+                          center=True)
+            else:
+                draw_text(surf, fonts.body(10), arrow, T.TEXT_MUTED, r.center,
+                          center=True)
 
 
 # --------------------------------------------------------------------------- #
@@ -294,8 +377,14 @@ class Toggle(Widget):
     def draw(self, surf, fonts) -> None:
         if not self.visible:
             return
+        hover = self.hovered()
         col = T.ACCENT if self.value else T.BORDER
+        if hover:
+            col = T.ACCENT_DARK if self.value else hover_tint(T.BORDER, 26)
         pygame.draw.rect(surf, col, self.rect, border_radius=T.R_PILL)
+        if hover:
+            pygame.draw.rect(surf, T.ACCENT, self.rect, width=2,
+                             border_radius=T.R_PILL)
         cx = self.rect.right - 14 if self.value else self.rect.x + 14
         pygame.draw.circle(surf, (255, 255, 255), (cx, self.rect.centery), 11)
 
@@ -365,10 +454,14 @@ class Dropdown(Widget):
     def draw(self, surf, fonts) -> None:
         if not self.visible:
             return
-        pygame.draw.rect(surf, T.BG, self.rect, border_radius=T.R_SM)
-        pygame.draw.rect(surf, T.BORDER, self.rect, width=1, border_radius=T.R_SM)
+        hover = self.hovered() or self.open
+        pygame.draw.rect(surf, T.SURFACE_ALT if hover else T.BG, self.rect,
+                         border_radius=T.R_SM)
+        pygame.draw.rect(surf, T.ACCENT if hover else T.BORDER, self.rect,
+                         width=2 if self.open else 1, border_radius=T.R_SM)
         draw_text(surf, fonts.body(16), self._label(), T.TEXT, (self.rect.x + 10, self.rect.centery - 9))
-        draw_text(surf, fonts.body(10), "▼", T.TEXT_MUTED, (self.rect.right - 16, self.rect.centery - 5))
+        draw_text(surf, fonts.body(10), "▼", T.ACCENT_DARK if hover else T.TEXT_MUTED,
+                  (self.rect.right - 16, self.rect.centery - 5))
 
     def draw_overlay(self, surf, fonts) -> None:
         if not self.open:
@@ -381,9 +474,18 @@ class Dropdown(Widget):
                 break
             v, lbl = self.options[i]
             r = pygame.Rect(self.rect.x, top + row * self.rect.h, self.rect.w, self.rect.h)
-            pygame.draw.rect(surf, T.ACCENT_SOFT if v == self.value else T.BG, r)
-            pygame.draw.rect(surf, T.BORDER, r, width=1)
-            draw_text(surf, fonts.body(16), lbl, T.TEXT, (r.x + 10, r.centery - 9))
+            row_hover = self.hovered(r)
+            if row_hover:
+                bg, border = T.ACCENT, T.ACCENT_DARK
+            elif v == self.value:
+                bg, border = T.ACCENT_SOFT, T.BORDER
+            else:
+                bg, border = T.BG, T.BORDER
+            pygame.draw.rect(surf, bg, r)
+            pygame.draw.rect(surf, border, r, width=1)
+            draw_text(surf, fonts.body(16), lbl,
+                      (255, 255, 255) if row_hover else T.TEXT,
+                      (r.x + 10, r.centery - 9))
         if vis < n:      # Scroll-Hinweis
             bar = pygame.Rect(self.rect.right - 5, top, 3, vis * self.rect.h)
             pygame.draw.rect(surf, T.SURFACE_ALT, bar)
@@ -418,14 +520,20 @@ class KeyBindField(Widget):
     def draw(self, surf, fonts) -> None:
         if not self.visible:
             return
+        hover = self.hovered()
         if self.capturing:
             border, label = T.ACCENT, "druecke Taste..."
         elif self.conflict:
             border, label = T.DANGER, key_name(self.code)
+        elif hover:
+            border, label = T.ACCENT, key_name(self.code)
         else:
             border, label = T.BORDER, key_name(self.code)
-        pygame.draw.rect(surf, T.BG, self.rect, border_radius=T.R_SM)
-        pygame.draw.rect(surf, border, self.rect, width=2 if (self.capturing or self.conflict) else 1, border_radius=T.R_SM)
+        pygame.draw.rect(surf, T.SURFACE_ALT if hover and not self.capturing else T.BG,
+                         self.rect, border_radius=T.R_SM)
+        pygame.draw.rect(surf, border, self.rect,
+                         width=2 if (self.capturing or self.conflict or hover) else 1,
+                         border_radius=T.R_SM)
         draw_text(surf, fonts.body(15), label, T.TEXT if not self.conflict else T.DANGER, self.rect.center, center=True)
 
 
@@ -460,8 +568,12 @@ class TextInput(Widget):
     def draw(self, surf, fonts) -> None:
         if not self.visible:
             return
-        pygame.draw.rect(surf, T.BG, self.rect, border_radius=T.R_SM)
-        pygame.draw.rect(surf, T.ACCENT if self.focused else T.BORDER, self.rect, width=1, border_radius=T.R_SM)
+        hover = self.hovered()
+        pygame.draw.rect(surf, T.SURFACE_ALT if hover and not self.focused else T.BG,
+                         self.rect, border_radius=T.R_SM)
+        pygame.draw.rect(surf, T.ACCENT if (self.focused or hover) else T.BORDER,
+                         self.rect, width=2 if self.focused else 1,
+                         border_radius=T.R_SM)
         shown = self.text or self.placeholder
         color = T.TEXT if self.text else T.TEXT_MUTED
         if self.focused and self.text and (pygame.time.get_ticks() // 500) % 2 == 0:
@@ -526,12 +638,14 @@ class ScrollPanel(Widget):
             return
         prev_clip = surf.get_clip()
         surf.set_clip(self.rect)
+        set_hover_clip(self.rect)
         for c in self.children:
             c.rect.y -= self.scroll_y
             visible = c.rect.bottom >= self.rect.y - 40 and c.rect.y <= self.rect.bottom + 40
             if visible:
                 c.draw(surf, fonts)
             c.rect.y += self.scroll_y
+        set_hover_clip(None)
         surf.set_clip(prev_clip)
         # Scrollbalken
         if self._max_scroll() > 0:

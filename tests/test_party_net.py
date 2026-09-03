@@ -169,6 +169,41 @@ def test_lan_race_is_host_authoritative():
         "beim Client sind die Autos nicht gefahren")
 
 
+def test_quiz_shows_the_same_question_on_both_machines():
+    """Der Kern der anpassbaren Schwierigkeit: die Stufe darf nie dazu
+    fuehren, dass Host und Client verschiedene Aufgaben anzeigen."""
+    seen = []
+    original = TournamentScene.update
+
+    def spy(self, dt):
+        original(self, dt)
+        g = self.game
+        if g is not None and getattr(g, "ladder", None) and g.question is not None:
+            seen.append((self.is_host, g.q_index, g.question["prompt"],
+                         g.level_of(g.q_index)))
+
+    TournamentScene.update = spy
+    try:
+        hs, cs = run_lan(["math"])
+    finally:
+        TournamentScene.update = original
+
+    assert hs.phase == "over"
+    host_q = {}
+    for is_host, idx, prompt, level in seen:
+        if is_host:
+            host_q[idx] = (prompt, level)
+    checked = 0
+    for is_host, idx, prompt, level in seen:
+        if is_host or idx not in host_q:
+            continue
+        checked += 1
+        assert (prompt, level) == host_q[idx], (
+            "Aufgabe %d: Host zeigt %s (Stufe %d), Client %s (Stufe %d)"
+            % (idx, host_q[idx][0], host_q[idx][1], prompt, level))
+    assert checked > 50, "zu wenig verglichen (%d)" % checked
+
+
 def test_single_game_ends_the_tournament():
     """'Einzelnes Spiel' laeuft ueber dieselbe Turnierlogik - genau eine Runde."""
     hs, cs = run_lan(["reaction"])

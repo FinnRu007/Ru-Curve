@@ -243,6 +243,8 @@ class TournamentScene:
             elif t == "pt_live" and msg.get("i") == self.tour.index:
                 for k, v in (msg.get("rows") or {}).items():
                     self.live[int(k)] = v
+                if self.game is not None and msg.get("up"):
+                    self.game.apply_live_up(cid, msg["up"])
             elif t == "pt_input" and self.game is not None:
                 self.game.apply_input(cid, msg)
             elif t == "pt_need_game":
@@ -287,6 +289,8 @@ class TournamentScene:
             elif t == "pt_live":
                 for k, v in (msg.get("rows") or {}).items():
                     self.live[int(k)] = v
+                if self.game is not None and msg.get("down"):
+                    self.game.apply_live_down(msg["down"])
             elif t == "pt_result":
                 self.tour.load_wire(msg.get("totals") or {})
                 from ..party.tournament import GameRecord
@@ -321,10 +325,18 @@ class TournamentScene:
             for k, v in rows.items():
                 self.live[int(k)] = v
             if self.host:
-                self.host.broadcast({"type": "pt_live", "i": self.tour.index,
-                                     "rows": {str(k): v for k, v in self.live.items()}})
+                out = {"type": "pt_live", "i": self.tour.index,
+                       "rows": {str(k): v for k, v in self.live.items()}}
+                down = self.game.net_live_down()
+                if down:
+                    out["down"] = down
+                self.host.broadcast(out)
         elif self.client:
-            self.client.send({"type": "pt_live", "i": self.tour.index, "rows": rows})
+            out = {"type": "pt_live", "i": self.tour.index, "rows": rows}
+            up = self.game.net_live_up()
+            if up:
+                out["up"] = up
+            self.client.send(out)
 
     def _sync_authoritative(self, dt):
         if self.game is None or not self.game.authoritative:

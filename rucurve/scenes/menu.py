@@ -94,9 +94,14 @@ class MenuScene(BaseMenuScene):
         box = getattr(self, "_update_rect", None)
         if box is None:
             return
+        from ..ui.widgets import hover_here
+
         fonts = self.app.fonts
-        pygame.draw.rect(surf, T.ACCENT_SOFT, box, border_radius=T.R_PILL)
-        pygame.draw.rect(surf, T.ACCENT, box, width=2, border_radius=T.R_PILL)
+        hover = hover_here(box)
+        pygame.draw.rect(surf, T.SURFACE_ALT if hover else T.ACCENT_SOFT, box,
+                         border_radius=T.R_PILL)
+        pygame.draw.rect(surf, T.ACCENT, box, width=3 if hover else 2,
+                         border_radius=T.R_PILL)
         text = "Neue Version %s verfuegbar - hier klicken zum Herunterladen" % chk.latest
         draw_text(surf, fonts.body_bold(15), text, T.ACCENT_DARK,
                   box.center, center=True)

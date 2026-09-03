@@ -45,6 +45,9 @@ BOOST_REFILL = 0.42           # pro Sekunde
 CAR_R = 24.0                  # Radius fuer Rempler
 TOW_DIST = TRACK_HALF * 2.2   # so weit daneben gilt man als "von der Strecke"
 TOW_AFTER = 2.0               # nach so vielen Sekunden zurueck auf die Bahn
+# Weiter als das von der Mittellinie weg zaehlt kein Fortschritt mehr. Sonst
+# koennte man quer ueber das Innenfeld abkuerzen und die Runde stimmt nicht.
+PROGRESS_LIMIT = TRACK_HALF * 1.5
 
 ASPHALT = (44, 48, 62)
 ASPHALT_HI = (54, 59, 76)
@@ -199,6 +202,7 @@ class RaceGame(MiniGame):
                 "x": x, "y": y, "h": head, "v": 0.0, "boost": BOOST_MAX,
                 "idx": idx, "lap": lap, "prog": float(lap) + idx / SAMPLES,
                 "fin": None, "bump": 0.0, "boosting": False, "lost": 0.0,
+                "offtrack": False,
                 # Bots fahren nach Schwierigkeit verhaltener
                 "skill": (0.74 + 0.26 * max(0.0, min(1.0, p.difficulty))
                           if p.is_bot else 1.0),
@@ -308,7 +312,7 @@ class RaceGame(MiniGame):
                 l, r, a = inputs.get(pid, (False, False, False))
             self._drive(car, dt, l, r, a)
             self._advance(car, dt)
-            self._track_progress(pid, car)
+            self._track_progress(pid, car, dt)
             self._tow_if_lost(car, dt)
         self._bumps()
 
@@ -340,12 +344,17 @@ class RaceGame(MiniGame):
         car["y"] = max(4.0, min(LOGIC_H - 4.0, car["y"]))
         car["bump"] = max(0.0, car["bump"] - dt)
 
-    def _nearest_index(self, car) -> float:
-        """Naechster Stuetzpunkt - nur im Fenster um die letzte Position gesucht."""
+    def _nearest_index(self, car, fwd: float = 21.0, back: float = 14.0) -> float:
+        """Naechster Stuetzpunkt - nur im Fenster um die letzte Position gesucht.
+
+        `fwd` begrenzt, wie weit der Index in EINEM Schritt nach vorn rutschen
+        darf. Ohne diese Grenze wandert er beim Queren des Innenfelds einfach
+        mit, und man haette abgekuerzt.
+        """
         n = len(self.center)
         best, best_d = car["idx"], 1e18
         base = int(car["idx"])
-        for k in range(-14, 22):
+        for k in range(-int(back), int(fwd) + 1):
             i = (base + k) % n
             px, py = self.center[i]
             d = (px - car["x"]) ** 2 + (py - car["y"]) ** 2
@@ -358,9 +367,19 @@ class RaceGame(MiniGame):
         px, py = self.center[i]
         return math.hypot(px - car["x"], py - car["y"])
 
-    def _track_progress(self, pid, car):
+    def _track_progress(self, pid, car, dt):
         n = len(self.center)
-        new = self._nearest_index(car)
+        # Der Index darf pro Schritt nur so weit vorruecken, wie das Auto
+        # tatsaechlich gefahren ist (mit etwas Luft).
+        max_step = car["v"] * dt / self._seg_len() * 2.0 + 1.5
+        new = self._nearest_index(car, fwd=max_step, back=4)
+        px, py = self.center[int(new) % n]
+        if math.hypot(px - car["x"], py - car["y"]) > PROGRESS_LIMIT:
+            # Zu weit weg von der Bahn - der Fortschritt friert genau dort ein,
+            # wo die Strecke verlassen wurde. Abkuerzen bringt damit nichts.
+            car["offtrack"] = True
+            return
+        car["offtrack"] = False
         old = car["idx"]
         step = (new - old + n) % n
         if step > n / 2:                      # rueckwaerts - nicht werten
@@ -469,7 +488,7 @@ class RaceGame(MiniGame):
             "c": [[pid, round(c["x"], 1), round(c["y"], 1), round(c["h"], 3),
                    round(c["v"], 1), c["lap"], round(c["boost"], 2),
                    round(c["prog"], 3), -1 if c["fin"] is None else round(c["fin"], 2),
-                   1 if c["boosting"] else 0]
+                   1 if c["boosting"] else 0, 1 if c["offtrack"] else 0]
                   for pid, c in self.cars.items()],
         }
 
@@ -485,6 +504,8 @@ class RaceGame(MiniGame):
             car["prog"] = row[7]
             car["fin"] = None if row[8] < 0 else row[8]
             car["boosting"] = bool(row[9])
+            if len(row) > 10:
+                car["offtrack"] = bool(row[10])
 
     # -- Ergebnis -------------------------------------------------------
     def finish(self):
@@ -588,6 +609,14 @@ class RaceGame(MiniGame):
             self._draw_car(surf, car, p.color if p else (220, 220, 220),
                            p.name if p else "?", car["boosting"])
 
+        # Wer quer im Innenfeld steht, soll wissen warum nichts vorangeht
+        for p in self.ctx.local_players:
+            car = self.cars.get(p.pid)
+            if car is not None and car["offtrack"] and car["fin"] is None:
+                U.banner(surf, self.ctx.fonts, "Zurueck auf die Strecke!",
+                         U.BAD, y=area.y + 46, size=30)
+                break
+
         self._draw_hud(surf, area)
 
     def _draw_hud(self, surf, area):
@@ -635,4 +664,7 @@ class RaceGame(MiniGame):
             if car["fin"] is not None:
                 draw_text(surf, fonts.body_bold(13), "Ziel!", U.OK,
                           (r.right - 44, r.y + 16))
+            elif car["offtrack"]:
+                draw_text(surf, fonts.body_bold(12), "zurueck!", U.BAD,
+                          (r.right - 60, r.y + 17))
             x += cw + 10

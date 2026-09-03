@@ -167,9 +167,13 @@ class _Swatch:
         pass
 
     def draw(self, surf, fonts):
+        from ..ui.widgets import hover_here
+
         slot = self.scene.slots[self.slot_idx]
+        hover = hover_here(self.rect)
         pygame.draw.rect(surf, color_for(slot.color_index), self.rect, border_radius=8)
-        pygame.draw.rect(surf, T.BORDER, self.rect, width=1, border_radius=8)
+        pygame.draw.rect(surf, T.ACCENT if hover else T.BORDER, self.rect,
+                         width=3 if hover else 1, border_radius=8)
 
 
 class _Mini:

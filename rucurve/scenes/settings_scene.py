@@ -22,6 +22,7 @@ from ..ui.widgets import (
     Slider,
     Toggle,
     draw_text,
+    hover_here,
 )
 from .common import BaseMenuScene
 
@@ -348,8 +349,11 @@ class _SectionHeader:
         pass
 
     def draw(self, surf, fonts):
-        bg = T.ACCENT_SOFT if (self.is_open or self._hover) else T.SURFACE
+        hover = hover_here(self.rect)
+        bg = T.SURFACE_ALT if hover else (T.ACCENT_SOFT if self.is_open else T.SURFACE)
         pygame.draw.rect(surf, bg, self.rect, border_radius=T.R_SM)
+        if hover:
+            pygame.draw.rect(surf, T.ACCENT, self.rect, width=2, border_radius=T.R_SM)
         _arrow(surf, (self.rect.x + 24, self.rect.centery), 6, self.is_open, T.ACCENT)
         draw_text(surf, fonts.display(21), self.text, T.ACCENT,
                   (self.rect.x + 40, self.rect.centery - 14))
@@ -375,8 +379,13 @@ class _PowerupHeader:
         pass
 
     def draw(self, surf, fonts):
-        pygame.draw.rect(surf, T.SURFACE if self.is_open else T.BG, self.rect, border_radius=T.R_SM)
-        pygame.draw.rect(surf, T.BORDER, self.rect, width=1, border_radius=T.R_SM)
+        hit = pygame.Rect(self.rect.x, self.rect.y, self.rect.w - 110, self.rect.h)
+        hover = hover_here(hit)
+        pygame.draw.rect(surf, T.SURFACE_ALT if hover else
+                         (T.SURFACE if self.is_open else T.BG),
+                         self.rect, border_radius=T.R_SM)
+        pygame.draw.rect(surf, T.ACCENT if hover else T.BORDER, self.rect,
+                         width=2 if hover else 1, border_radius=T.R_SM)
         col = T.TEXT if self.cfg.enabled else T.TEXT_MUTED
         _arrow(surf, (self.rect.x + 22, self.rect.centery), 5, self.is_open, T.TEXT_MUTED)
         draw_text(surf, fonts.body_bold(17), self.meta["label"], col,

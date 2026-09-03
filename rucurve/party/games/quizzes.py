@@ -1,5 +1,10 @@
 """Die vier Multiple-Choice-Minispiele: Kopfrechnen, Flaechen, Schaetzen,
-Ausreisser finden. Alle nutzen QuizGame und damit die drei Spielertasten."""
+Ausreisser finden. Alle nutzen QuizGame und damit die drei Spielertasten.
+
+Jedes Spiel liefert seine Aufgaben in vier Schwierigkeitsstufen (0 = leicht,
+3 = schwer). Welche Stufe gerade gilt, entscheidet der Host nach der
+Trefferquote aller Spieler - siehe `party/quiz.py`.
+"""
 
 from __future__ import annotations
 
@@ -19,7 +24,7 @@ def _choices(rng, correct, spread, lo=None, as_int=True):
     guard = 0
     while len(opts) < 3 and guard < 200:
         guard += 1
-        delta = rng.choice([-1, 1]) * rng.randint(1, max(1, spread))
+        delta = rng.choice([-1, 1]) * rng.randint(1, max(1, int(spread)))
         cand = correct + delta
         if lo is not None and cand < lo:
             continue
@@ -27,6 +32,30 @@ def _choices(rng, correct, spread, lo=None, as_int=True):
     while len(opts) < 3:
         opts.add(correct + len(opts))
     out = list(opts)
+    rng.shuffle(out)
+    return [str(o) for o in out], out.index(correct)
+
+
+def _spread_choices(rng, correct, rel, lo=1):
+    """Ablenker in RELATIVEM Abstand - je groesser `rel`, desto leichter.
+
+    Fuers Schaetzen: bei "wie viele Punkte" nuetzen dicht beieinander
+    liegende Zahlen nichts, man kann sie nicht auseinanderhalten.
+    """
+    gap = max(2, int(round(correct * rel)))
+    low = max(lo, correct - gap - rng.randint(0, max(1, gap // 4)))
+    high = correct + gap + rng.randint(0, max(1, gap // 4))
+    if low == correct:
+        low = max(lo, correct - gap)
+    if low == correct:                       # ganz kleine Zahlen
+        high2 = correct + 2 * gap
+        out = [correct, high, high2]
+    else:
+        out = [low, correct, high]
+    out = sorted(set(out))
+    while len(out) < 3:
+        out.append(out[-1] + gap)
+    out = out[:3]
     rng.shuffle(out)
     return [str(o) for o in out], out.index(correct)
 
@@ -39,25 +68,46 @@ class MathQuiz(QuizGame):
     n_questions = 10
 
     @staticmethod
-    def make_question(rng, index):
-        step = index / 9.0 if index else 0.0
-        hi = int(10 + 40 * step)
-        op = rng.choice("++-x" if index < 4 else "+-xx:")
+    def make_question(rng, index, level):
+        # Untergrenzen wachsen mit: sonst wuerfelt auch die hoechste Stufe
+        # noch "3 x 2" und die Stufe waere nicht zu spueren.
+        if level <= 0:
+            op = rng.choice("+++--x")
+            lo, hi, lo_mul, mul = 3, 15, 2, 5
+        elif level == 1:
+            op = rng.choice("++--xx:")
+            lo, hi, lo_mul, mul = 8, 60, 3, 9
+        elif level == 2:
+            op = rng.choice("+--xxx::")
+            lo, hi, lo_mul, mul = 20, 140, 6, 13
+        else:
+            op = rng.choice("-xxx::22")           # 2 = zweischrittig
+            lo, hi, lo_mul, mul = 40, 240, 8, 19
+
         if op == "+":
-            a, b = rng.randint(2, hi), rng.randint(2, hi)
+            a, b = rng.randint(lo, hi), rng.randint(lo, hi)
             val, txt = a + b, "%d + %d" % (a, b)
         elif op == "-":
-            a, b = rng.randint(5, hi + 10), rng.randint(2, hi)
+            a, b = rng.randint(lo + 5, hi + 10), rng.randint(lo, hi)
             a, b = max(a, b), min(a, b)
             val, txt = a - b, "%d - %d" % (a, b)
         elif op == "x":
-            a, b = rng.randint(2, 4 + int(9 * step)), rng.randint(2, 4 + int(9 * step))
+            a, b = rng.randint(lo_mul, mul), rng.randint(lo_mul, mul)
             val, txt = a * b, "%d x %d" % (a, b)
-        else:
-            b = rng.randint(2, 9)
-            val = rng.randint(2, 12)
+        elif op == ":":
+            b = rng.randint(2 + level, 4 + level * 3)
+            val = rng.randint(3 + level * 2, 6 + level * 6)
             txt = "%d : %d" % (val * b, b)
-        options, correct = _choices(rng, val, max(2, abs(val) // 4 + 2), lo=0)
+        else:                                     # zwei Schritte
+            a, b = rng.randint(6, 15), rng.randint(4, 9)
+            c = rng.randint(8, 60)
+            if rng.random() < 0.5:
+                val, txt = a * b + c, "%d x %d + %d" % (a, b, c)
+            else:
+                val, txt = a * b - c, "%d x %d - %d" % (a, b, c)
+
+        spread = max(2, abs(val) // (6 - level) + 2)
+        options, correct = _choices(rng, val, spread, lo=min(0, val))
         return {"prompt": txt + " = ?", "options": options, "correct": correct}
 
 
@@ -69,37 +119,57 @@ class AreaQuiz(QuizGame):
     n_questions = 10
 
     @staticmethod
-    def make_question(rng, index):
-        kind = rng.choice(["rect", "rect", "tri", "circle", "square"])
+    def make_question(rng, index, level):
+        # Der Kreis kommt bewusst erst auf der hoechsten Stufe vor - mit Pi im
+        # Kopf zu rechnen ist ein ganz anderes Kaliber als Laenge mal Breite.
+        if level <= 0:
+            kinds, hi = ["rect", "square"], 9
+        elif level == 1:
+            kinds, hi = ["rect", "rect", "square", "tri"], 12
+        elif level == 2:
+            kinds, hi = ["rect", "tri", "tri", "square"], 18
+        else:
+            kinds, hi = ["rect", "tri", "circle", "circle"], 22
+
+        kind = rng.choice(kinds)
+        hint = ""
         if kind == "rect":
-            a, b = rng.randint(3, 14), rng.randint(3, 12)
-            val, prompt = a * b, "Rechteck  %d x %d" % (a, b)
-            dims = [a, b]
+            a, b = rng.randint(3, hi), rng.randint(3, max(3, hi - 2))
+            val, prompt, dims = a * b, "Rechteck  %d x %d" % (a, b), [a, b]
         elif kind == "square":
-            a = rng.randint(3, 13)
-            val, prompt = a * a, "Quadrat  Seite %d" % a
-            dims = [a, a]
+            a = rng.randint(3, hi)
+            val, prompt, dims = a * a, "Quadrat  Seite %d" % a, [a, a]
         elif kind == "tri":
-            g, h = rng.randint(4, 16), rng.randint(3, 12)
+            g, h = rng.randint(4, hi), rng.randint(3, max(3, hi - 4))
             if (g * h) % 2:
                 g += 1
-            val, prompt = g * h // 2, "Dreieck  g=%d  h=%d" % (g, h)
-            dims = [g, h]
+            val, prompt, dims = g * h // 2, "Dreieck  g=%d  h=%d" % (g, h), [g, h]
         else:
-            r = rng.randint(2, 7)
+            r = rng.randint(2, 6)
             val = round(math.pi * r * r)
-            prompt = "Kreis  r=%d  (auf ganze Zahl)" % r
+            prompt = "Kreis  r=%d" % r
+            hint = "A = Pi mal r hoch 2   (Pi ist rund 3,14)"
             dims = [r, r]
-        options, correct = _choices(rng, val, max(3, val // 5 + 2), lo=1)
+
+        # Beim Kreis liegen die Antworten weit auseinander: gut schaetzen soll
+        # reichen, genau rechnen ist in 5 Sekunden nicht drin.
+        spread = max(3, val // 2) if kind == "circle" else max(3, val // 5 + 2)
+        options, correct = _choices(rng, val, spread, lo=1)
         return {"prompt": prompt, "options": options, "correct": correct,
-                "kind": kind, "dims": dims}
+                "kind": kind, "dims": dims, "hint": hint}
 
     def draw_question(self, surf, area, q):
         fonts = self.ctx.fonts
         draw_text(surf, fonts.display(28), q["prompt"], U.TEXT,
                   (area.centerx - fonts.display(28).size(q["prompt"])[0] // 2, area.y + 4))
+        hint = q.get("hint")
+        top = area.y + 40
+        if hint:
+            img = fonts.body(15).render(hint, True, U.GOLD)
+            surf.blit(img, img.get_rect(midtop=(area.centerx, top)))
+            top += 24
         box = pygame.Rect(0, 0, min(300, area.w - 40), min(190, area.h - 60))
-        box.center = (area.centerx, area.y + 52 + box.h // 2)
+        box.center = (area.centerx, top + 12 + box.h // 2)
         kind = q.get("kind", "rect")
         dims = q.get("dims", [4, 3])
         col = U.ACCENT
@@ -108,7 +178,7 @@ class AreaQuiz(QuizGame):
             scale = min(box.w / max(a, 1), box.h / max(b, 1)) * 0.85
             r = pygame.Rect(0, 0, int(a * scale), int(b * scale))
             r.center = box.center
-            pygame.draw.rect(surf, (*col, 70) if False else U.PANEL_HI, r)
+            pygame.draw.rect(surf, U.PANEL_HI, r)
             pygame.draw.rect(surf, col, r, width=3)
             self._label(surf, "%d" % a, (r.centerx, r.bottom + 14))
             self._label(surf, "%d" % b, (r.left - 16, r.centery))
@@ -145,11 +215,17 @@ class EstimateQuiz(QuizGame):
     n_questions = 8
     per_question = 4.0
 
-    @staticmethod
-    def make_question(rng, index):
-        n = rng.randint(9, 20 + index * 5)
-        spread = max(3, n // 4)
-        options, correct = _choices(rng, n, spread, lo=1)
+    # Wie weit die Antworten auseinanderliegen (Anteil der richtigen Zahl).
+    # Grosszuegig, denn Punkte im Feld zaehlt in 4 Sekunden niemand genau -
+    # geschaetzt werden soll die Groessenordnung.
+    SPREAD = (0.60, 0.45, 0.34, 0.26)
+    RANGES = ((7, 15), (12, 25), (20, 38), (30, 55))
+
+    @classmethod
+    def make_question(cls, rng, index, level):
+        lo, hi = cls.RANGES[max(0, min(3, level))]
+        n = rng.randint(lo, hi)
+        options, correct = _spread_choices(rng, n, cls.SPREAD[max(0, min(3, level))])
         return {"prompt": "Wie viele Punkte?", "options": options,
                 "correct": correct, "count": n, "seed": rng.randrange(1 << 30)}
 
@@ -188,19 +264,22 @@ class OddOneQuiz(QuizGame):
     n_questions = 8
     per_question = 4.0
 
-    @staticmethod
-    def make_question(rng, index):
+    ROWS = (3, 4, 5, 7)
+    DIFF = (62, 42, 26, 15)          # Farbunterschied - kleiner = schwerer
+
+    @classmethod
+    def make_question(cls, rng, index, level):
+        lv = max(0, min(3, level))
         cols = 9
-        rows = 4 + min(3, index // 3)
+        rows = cls.ROWS[lv]
         third = rng.randint(0, 2)
         cx = rng.randrange(third * (cols // 3), (third + 1) * (cols // 3))
         cy = rng.randrange(rows)
         base = rng.randrange(12)
-        diff = max(46 - index * 4, 14)
         return {"prompt": "Wo ist das andere Feld?",
                 "options": ["links", "mitte", "rechts"], "correct": third,
                 "cols": cols, "rows": rows, "cx": cx, "cy": cy,
-                "base": base, "diff": diff}
+                "base": base, "diff": cls.DIFF[lv]}
 
     def draw_question(self, surf, area, q):
         from ...colors import color_for

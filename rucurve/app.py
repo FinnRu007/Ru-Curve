@@ -44,6 +44,7 @@ class App:
         self.running = True
         self.scene: Scene | None = None
         self._pending_scene: Scene | None = None
+        self._cursor = pygame.SYSTEM_CURSOR_ARROW
         # Schaut im Hintergrund, ob es auf der Ru-Services-Seite eine
         # neuere Version gibt (blockiert nie den Start).
         from .net.internet import UpdateCheck
@@ -105,6 +106,22 @@ class App:
         self._pending_scene = None
         self.scene.on_enter()
 
+    def _update_cursor(self) -> None:
+        """Handzeiger, sobald etwas Anklickbares unter der Maus liegt.
+
+        Die Widgets melden sich beim Zeichnen selbst - deshalb steht das hier
+        NACH dem Zeichnen des Bildes.
+        """
+        from .ui.widgets import take_hover
+
+        want = pygame.SYSTEM_CURSOR_HAND if take_hover() else pygame.SYSTEM_CURSOR_ARROW
+        if want != self._cursor:
+            self._cursor = want
+            try:
+                pygame.mouse.set_cursor(want)
+            except pygame.error:
+                pass
+
     def save_config(self) -> None:
         self.config.save()
 
@@ -131,6 +148,7 @@ class App:
                 self.scene.handle_events(events)
                 self.scene.update(dt)
                 self.scene.draw(self.screen)
+            self._update_cursor()
             pygame.display.flip()
             if self._pending_scene is not None:
                 self._swap_scene()

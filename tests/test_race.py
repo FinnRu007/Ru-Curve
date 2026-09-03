@@ -166,8 +166,56 @@ def test_progress_ignores_driving_backwards():
     # rueckwaerts ueber die Start-Ziel-Linie
     x, y, _h = g._pose_at(len(g.center) - 6)
     car["x"], car["y"] = x, y
-    g._track_progress(0, car)
+    g._track_progress(0, car, 1 / 60.0)
     assert car["lap"] == 1, "Rueckwaertsfahren hat eine Runde gutgeschrieben"
+
+
+def test_cutting_across_the_infield_gains_nothing():
+    """Quer ueber das Innenfeld fahren darf keinen Fortschritt bringen."""
+    g = make_game([0.5])
+    car = g.cars[0]
+    n = len(g.center)
+    # Auf die gegenueberliegende Seite der Strecke zielen und quer rueberfahren
+    tx, ty, _ = g._pose_at(n / 2)
+    before_prog, before_idx = car["prog"], car["idx"]
+    for _ in range(60 * 6):
+        car["h"] = math.atan2(ty - car["y"], tx - car["x"])
+        car["v"] = MAX_SPEED
+        g._advance(car, 1 / 60.0)
+        g._track_progress(0, car, 1 / 60.0)
+    assert car["lap"] < 1, "Abkuerzung hat eine Runde gutgeschrieben"
+    gained = (car["idx"] - before_idx) % n
+    assert gained < n * 0.2, (
+        "Index ist beim Queren um %.0f von %d Stuetzpunkten vorgerueckt"
+        % (gained, n))
+    assert car["offtrack"], "Auto quer im Innenfeld gilt nicht als abseits"
+
+
+def test_progress_counts_again_after_returning_to_the_track():
+    """Der eingefrorene Fortschritt muss beim Zurueckkommen weiterlaufen."""
+    g = make_game([0.5])
+    car = g.cars[0]
+    car["x"], car["y"] = LOGIC_W / 2, LOGIC_H / 2      # mitten im Innenfeld
+    g._track_progress(0, car, 1 / 60.0)
+    assert car["offtrack"]
+    frozen = car["idx"]
+    x, y, h = g._pose_at(frozen)                       # zurueck auf die Bahn
+    car["x"], car["y"], car["h"], car["v"] = x, y, h, 300.0
+    for _ in range(120):
+        # der Bahn folgen statt geradeaus - sonst verlaesst man sie wieder
+        tx, ty, _ = g._pose_at(car["idx"] + 6)
+        car["h"] = math.atan2(ty - car["y"], tx - car["x"])
+        g._advance(car, 1 / 60.0)
+        g._track_progress(0, car, 1 / 60.0)
+    assert not car["offtrack"]
+    assert (car["idx"] - frozen) % len(g.center) > 5, "Fortschritt lief nicht weiter"
+
+
+def test_normal_driving_is_not_slowed_by_the_shortcut_rule():
+    """Die Abkuerzungssperre darf sauberes Fahren nicht ausbremsen."""
+    times = [race([1.0], seed=s)[1] for s in range(6)]
+    assert statistics.median(times) < 16.0, (
+        "starker Bot braucht ploetzlich %.1f s" % statistics.median(times))
 
 
 def test_lost_car_gets_towed_back_to_the_track():

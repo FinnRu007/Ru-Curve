@@ -213,6 +213,23 @@ class MiniGame:
     def apply_input(self, client_id: int, data: dict) -> None:
         """Host: Eingaben eines Clients einspielen."""
 
+    # -- Kleiner Zusatzkanal, der auf den Live-Nachrichten mitreist -----
+    # Wird ~3x pro Sekunde gesendet und ist damit selbstheilend: geht ein
+    # Paket verloren, ist der Stand einen Frame spaeter wieder richtig.
+    def net_live_up(self) -> dict | None:
+        """Client -> Host: was der Host von diesem Rechner wissen muss."""
+        return None
+
+    def apply_live_up(self, client_id: int, data: dict) -> None:
+        """Host: Zusatzdaten eines Clients einspielen."""
+
+    def net_live_down(self) -> dict | None:
+        """Host -> Clients: Entscheidungen, die ueberall gleich gelten muessen."""
+        return None
+
+    def apply_live_down(self, data: dict) -> None:
+        """Client: Entscheidung des Hosts uebernehmen."""
+
     def host_results(self) -> dict:
         """Nur bei authoritative: Ergebnis fuer ALLE Spieler."""
         return self.results_map
