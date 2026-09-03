@@ -112,6 +112,10 @@ class Tournament:
         for row in rows:
             pts = points_for_place(row["place"], n, self.points_top) if row["done"] else 0
             row["points"] = pts
+            if not row["done"] and not row["detail"]:
+                # Sonst steht in der Ergebnisliste eine leere Zeile mit 0
+                # Punkten und niemand weiss, warum.
+                row["detail"] = "nicht mitgespielt"
             self.totals[row["pid"]] = self.totals.get(row["pid"], 0) + pts
         rec = GameRecord(game_id, game_name, rows)
         self.history.append(rec)

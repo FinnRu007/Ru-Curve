@@ -211,6 +211,11 @@ class ArenaGame(MiniGame):
     def _on_dash(self, u) -> None:
         """Haken fuer Unterklassen (Ton, Effekt)."""
 
+    def unit_radius(self, u) -> float:
+        """Radius eines Spielers. Standard fuer alle gleich - Spiele, in denen
+        Spieler wachsen, setzen `u["r"]` und bekommen das hier automatisch."""
+        return float(u.get("r", self.RADIUS))
+
     def knockback(self, u, heading: float, speed: float, seconds: float = 0.5):
         """Stoss, der eine Weile nachwirkt - unabhaengig von der Lenkung.
 
@@ -234,7 +239,7 @@ class ArenaGame(MiniGame):
             u["x"] %= LOGIC_W
             u["y"] %= LOGIC_H
         elif self.WALLS == "bounce":
-            r = self.RADIUS
+            r = self.unit_radius(u)
             if u["x"] < r or u["x"] > LOGIC_W - r:
                 u["x"] = max(r, min(LOGIC_W - r, u["x"]))
                 u["h"] = math.pi - u["h"]
@@ -252,10 +257,11 @@ class ArenaGame(MiniGame):
                 b = self.units[pids[j]]
                 dx, dy = b["x"] - a["x"], b["y"] - a["y"]
                 d = math.hypot(dx, dy)
-                if d >= self.RADIUS * 2 or d < 1e-6:
+                reach = self.unit_radius(a) + self.unit_radius(b)
+                if d >= reach or d < 1e-6:
                     continue
                 ux, uy = dx / d, dy / d
-                push = (self.RADIUS * 2 - d) / 2.0
+                push = (reach - d) / 2.0
                 a["x"] -= ux * push
                 a["y"] -= uy * push
                 b["x"] += ux * push
@@ -380,11 +386,12 @@ class ArenaGame(MiniGame):
 
     def draw_unit(self, surf, u, radius=None, ring=None):
         x, y = self.to_screen(u["x"], u["y"])
-        r = self.px(radius if radius is not None else self.RADIUS)
+        r = self.px(radius if radius is not None else self.unit_radius(u))
         col = self.unit_color(u)
         if u["dash_left"] > 0.0:                     # Schubschweif
-            tx, ty = self.to_screen(u["x"] - math.cos(u["h"]) * self.RADIUS * 1.6,
-                                    u["y"] - math.sin(u["h"]) * self.RADIUS * 1.6)
+            back = self.unit_radius(u) * 1.6
+            tx, ty = self.to_screen(u["x"] - math.cos(u["h"]) * back,
+                                    u["y"] - math.sin(u["h"]) * back)
             pygame.draw.line(surf, (255, 210, 120), (tx, ty), (x, y), max(2, r // 3))
         pygame.draw.circle(surf, col, (int(x), int(y)), r)
         pygame.draw.circle(surf, (12, 14, 22), (int(x), int(y)), r, max(1, r // 8))

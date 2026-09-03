@@ -311,7 +311,12 @@ class SequenceGame(MiniGame):
             r = self.results_map[pid]
             r.raw = self.reached.get(pid, 0)
             r.time = round(self.spent.get(pid, 0.0), 3)
-            r.detail = "Stufe %d" % r.raw
+            # Die gebrauchte Zeit MIT anzeigen: bei gleicher Stufe entscheidet
+            # sie ueber den Platz, und ohne sie sieht es im Ergebnis so aus,
+            # als bekaemen gleich gute Spieler willkuerlich verschiedene
+            # Punkte.
+            r.detail = ("Stufe %d - %.1f s" % (r.raw, r.time) if r.raw
+                        else "Stufe 0")
         super().finish()
 
     def live_rows(self):

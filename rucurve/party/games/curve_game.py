@@ -81,7 +81,7 @@ class CurveGame(MiniGame):
     # Im Turnier soll eine Runde flott sein. Die normale Einstellung ist auf
     # ein ganzes Match ausgelegt; hier zaehlt eine einzelne Runde, und bei
     # gemuetlichem Tempo passiert zu lange nichts.
-    SPEED_BOOST = 1.6
+    SPEED_BOOST = 2.3
 
     def _round_settings(self):
         """Einstellungen fuer diese Runde.

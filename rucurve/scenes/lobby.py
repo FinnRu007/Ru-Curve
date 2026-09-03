@@ -107,9 +107,9 @@ class LobbyScene(BaseMenuScene):
             pid += 1
         self._next_pid = pid
 
-    def _unique_name(self, name: str) -> str:
+    def _unique_name(self, name: str, skip=None) -> str:
         """Gleiche Namen sind in der Rangliste nicht auseinanderzuhalten."""
-        taken = {p.name for p in self.players}
+        taken = {p.name for p in self.players if p is not skip}
         if name not in taken:
             return name
         for n in range(2, 20):
@@ -563,7 +563,11 @@ class LobbyScene(BaseMenuScene):
             elif mtype == "set_name":
                 for p in self.players:
                     if p.pid == msg.get("pid") and p.client_id == cid:
-                        p.name = str(msg.get("name", p.name))[:14]
+                        want = str(msg.get("name", p.name))[:14].strip()
+                        if want and want != p.name:
+                            # gleiche Pruefung wie beim Beitreten, sonst
+                            # heissen ploetzlich zwei Leute gleich
+                            p.name = self._unique_name(want, skip=p)
                 dirty = True
             elif mtype == "__disconnect__":
                 pids = self._client_players.pop(cid, [])

@@ -296,8 +296,14 @@ class OddOneQuiz(QuizGame):
     n_questions = 8
     per_question = 4.0
 
-    ROWS = (3, 4, 5, 7)
-    COLS = (6, 9, 9, 12)
+    # Zeilen und Spalten muessen durch 3 teilbar sein - sonst faellt die
+    # Trennlinie mitten durch eine Kachel und man sieht nicht eindeutig, zu
+    # welchem Drittel sie gehoert.
+    # Hoehe ist knapp (Antworten und Kartenreihe brauchen den unteren Teil),
+    # Breite ist reichlich da. Die Schwierigkeit waechst deshalb ueber die
+    # Spalten und den Farbunterschied, nicht ueber immer mehr Zeilen.
+    ROWS = (3, 6, 6, 6)
+    COLS = (6, 9, 12, 15)
     DIFF = (62, 42, 26, 15)          # Farbunterschied - kleiner = schwerer
     # Die Einteilung wechselt: mal senkrecht, mal waagerecht. Sonst schaut
     # man nach ein paar Runden nur noch auf drei feste Spalten.
@@ -330,21 +336,63 @@ class OddOneQuiz(QuizGame):
         from ...colors import color_for
 
         cols, rows = q["cols"], q["rows"]
-        box = pygame.Rect(0, 0, min(area.w - 60, cols * 74), min(area.h - 24, rows * 66))
+        split = q.get("split", "senkrecht")
+        # Zwischen den Dritteln bleibt eine echte Luecke, und die Trennlinie
+        # liegt exakt darin. Vorher lief sie irgendwo durch die Kacheln, und
+        # bei Feldern direkt an der Grenze war nicht zu erkennen, auf welcher
+        # Seite sie liegen.
+        gap = 26
+        avail_w = min(area.w - 140, cols * 74) - (2 * gap if split == "senkrecht" else 0)
+        avail_h = min(area.h - 60, rows * 62) - (2 * gap if split == "waagerecht" else 0)
+        # Kacheln quadratisch halten - flachgequetschte Streifen sind schwerer
+        # zu vergleichen als gleichmaessige Felder.
+        side = max(14, min(avail_w // cols, avail_h // rows))
+        ch = side
+        # Etwas breiter als hoch ist in Ordnung und nutzt den Platz - flach
+        # gequetschte Streifen (mehr als 1.5:1) sind dagegen schwer zu lesen.
+        cw = max(side, min(avail_w // cols, int(side * 1.5)))
+        box = pygame.Rect(0, 0, cw * cols + (2 * gap if split == "senkrecht" else 0),
+                          ch * rows + (2 * gap if split == "waagerecht" else 0))
         box.center = (area.centerx, area.centery)
-        cw, ch = box.w // cols, box.h // rows
         base = color_for(q["base"])
         odd = tuple(max(0, min(255, c - q["diff"])) for c in base)
+
+        def cell_pos(c, r):
+            x = box.x + c * cw + (gap * (c // (cols // 3)) if split == "senkrecht" else 0)
+            y = box.y + r * ch + (gap * (r // (rows // 3)) if split == "waagerecht" else 0)
+            return x, y
+
         for r in range(rows):
             for c in range(cols):
-                cell = pygame.Rect(box.x + c * cw + 3, box.y + r * ch + 3, cw - 6, ch - 6)
+                x, y = cell_pos(c, r)
+                cell = pygame.Rect(x + 3, y + 3, cw - 6, ch - 6)
                 col = odd if (c == q["cx"] and r == q["cy"]) else base
                 pygame.draw.rect(surf, col, cell, border_radius=8)
-        if q.get("split", "senkrecht") == "senkrecht":
-            for i in range(1, 3):
-                x = box.x + i * (box.w // 3)
-                pygame.draw.line(surf, U.LINE, (x, box.y - 6), (x, box.bottom + 6), 2)
-        else:
-            for i in range(1, 3):
-                y = box.y + i * (box.h // 3)
-                pygame.draw.line(surf, U.LINE, (box.x - 6, y), (box.right + 6, y), 2)
+        self._draw_splits(surf, box, q, cw, ch, gap)
+        return
+    def _draw_splits(self, surf, box, q, cw, ch, gap):
+        """Trennlinien genau in die Luecken zwischen den Dritteln."""
+        cols, rows = q["cols"], q["rows"]
+        split = q.get("split", "senkrecht")
+        labels = q.get("options", ["links", "mitte", "rechts"])
+        fonts = self.ctx.fonts
+        for i in (1, 2):
+            if split == "senkrecht":
+                x = box.x + i * (cols // 3) * cw + gap * i - gap // 2
+                pygame.draw.line(surf, U.TEXT, (x, box.y - 10),
+                                 (x, box.bottom + 10), 3)
+            else:
+                y = box.y + i * (rows // 3) * ch + gap * i - gap // 2
+                pygame.draw.line(surf, U.TEXT, (box.x - 10, y),
+                                 (box.right + 10, y), 3)
+        # Die drei Bereiche beschriften - dann ist die Zuordnung eindeutig
+        for i, name in enumerate(labels[:3]):
+            if split == "senkrecht":
+                cx = box.x + (i + 0.5) * (cols // 3) * cw + gap * i
+                pos = (cx, box.bottom + 14)
+            else:
+                cy = box.y + (i + 0.5) * (rows // 3) * ch + gap * i
+                pos = (box.right + 16, cy - 9)
+            img = fonts.body_bold(14).render(str(name), True, U.MUTED)
+            surf.blit(img, img.get_rect(midtop=pos) if split == "senkrecht"
+                      else img.get_rect(midleft=pos))

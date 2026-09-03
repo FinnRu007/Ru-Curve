@@ -12,6 +12,7 @@ Turnier nicht sein.
 
 from __future__ import annotations
 
+from .games.blob import BlobGame
 from .games.curve_game import CurveGame
 from .games.harvest import HarvestGame
 from .games.quizzes import AreaQuiz, EstimateQuiz, MathQuiz, OddOneQuiz
@@ -29,6 +30,7 @@ ALL_GAMES = [
     OddOneQuiz,
     MashGame,
     HarvestGame,
+    BlobGame,
     TagGame,
     SumoGame,
     RaceGame,

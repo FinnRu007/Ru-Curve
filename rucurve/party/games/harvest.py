@@ -19,8 +19,12 @@ from ..arena import LOGIC_H, LOGIC_W, ArenaGame
 
 MARGIN = 70.0
 PICK_RADIUS = 34.0          # zusaetzlich zum Spielerradius
-STEAL_SHARE = 0.30          # Anteil, den ein Treffer kostet
-STEAL_MIN = 1               # aber mindestens so viele
+# Wie viel ein Treffer kostet. Ein Drittel war zu viel: wer vorn lag, hatte
+# nach zwei Rempler nichts mehr, und Sammeln fuehlte sich sinnlos an. Dazu
+# eine feste Obergrenze, damit ein Vorsprung nicht in einem Schlag verpufft.
+STEAL_SHARE = 0.15
+STEAL_MIN = 1
+STEAL_CAP = 4               # mehr als so viele nimmt ein Treffer nie
 CRYSTAL = (120, 224, 255)
 SHARD = (255, 214, 120)
 
@@ -30,13 +34,13 @@ class HarvestGame(ArenaGame):
             "anderen Kristalle aus der Hand - die Haelfte davon bekommst du "
             "sofort, der Rest fliegt als Splitter aufs Feld.")
     key_help = ("nach links lenken", "Rammstoss (selten!)", "nach rechts lenken")
-    scoring_help = ("je gesammeltem Kristall. Wer viel hat, verliert pro "
-                    "Treffer mehr - der Fuehrende ist Zielscheibe.")
+    scoring_help = ("je gesammeltem Kristall. Ein Treffer kostet hoechstens "
+                    "vier Stueck - ein Vorsprung ist also nicht mit einem "
+                    "Schlag weg.")
     id = "harvest"
     name = "Ru-Ernte"
     rules = ("Sammle die blauen Kristalle. Aktionstaste = Rammstoss - wer "
-             "rammt, schlaegt dem anderen Kristalle aus der Hand. Wer viel "
-             "hat, verliert mehr.")
+             "rammt, schlaegt dem anderen ein paar Kristalle aus der Hand.")
     live_unit = ""
     max_seconds = 50.0
 
@@ -105,7 +109,7 @@ class HarvestGame(ArenaGame):
             if victim["score"] <= 0:
                 continue
             lost = max(STEAL_MIN, int(victim["score"] * STEAL_SHARE))
-            lost = min(lost, int(victim["score"]))
+            lost = min(lost, STEAL_CAP, int(victim["score"]))
             victim["score"] -= lost
             # Die Haelfte greift sich der Rammende sofort, der Rest fliegt
             # als Splitter weg. Ohne diesen direkten Gewinn waere Rammen

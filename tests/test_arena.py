@@ -25,12 +25,13 @@ from rucurve.app import App  # noqa: E402
 from rucurve.colors import color_for  # noqa: E402
 from rucurve.party.arena import LOGIC_H, LOGIC_W  # noqa: E402
 from rucurve.party.base import GameContext, PartyPlayer  # noqa: E402
+from rucurve.party.games.blob import BlobGame  # noqa: E402
 from rucurve.party.games.harvest import HarvestGame  # noqa: E402
 from rucurve.party.games.sumo import SumoGame  # noqa: E402
 from rucurve.party.games.tag import TagGame  # noqa: E402
 from rucurve.party.registry import ALL_GAMES, INTERACTIVE_IDS  # noqa: E402
 
-ARENAS = (SumoGame, TagGame, HarvestGame)
+ARENAS = (SumoGame, TagGame, HarvestGame, BlobGame)
 _app = None
 AREA = pygame.Rect(0, 90, 1004, 520)
 
@@ -87,8 +88,10 @@ def test_players_start_apart_and_inside():
         for i in range(len(pos)):
             for j in range(i + 1, len(pos)):
                 d = math.dist(pos[i], pos[j])
-                assert d > cls.RADIUS * 2, (
-                    "%s: Start zu eng (%.0f px)" % (cls.name, d))
+                units = list(g.units.values())
+                need = g.unit_radius(units[i]) + g.unit_radius(units[j])
+                assert d > need, (
+                    "%s: Start zu eng (%.0f px, braucht %.0f)" % (cls.name, d, need))
 
 
 def test_collision_pushes_players_apart():
@@ -156,7 +159,9 @@ def test_rounds_have_a_sensible_length():
     for cls in ARENAS:
         times = [play(make(cls, DIFFS, seed=s)) for s in range(4)]
         med = statistics.median(times)
-        assert 12.0 < med < 60.0, "%s: %.1f s" % (cls.name, med)
+        assert 12.0 < med <= cls.max_seconds + 2, "%s: %.1f s" % (cls.name, med)
+        assert med <= 65.0, "%s dauert %.1f s - zu lang fuer ein Minispiel" % (
+            cls.name, med)
 
 
 # =========================================================================== #
@@ -388,6 +393,97 @@ def test_harvest_items_stay_inside_the_arena():
     play(g, seconds=20.0)
     for it in g.items:
         assert 0 < it["x"] < LOGIC_W and 0 < it["y"] < LOGIC_H
+
+
+# =========================================================================== #
+#  Ru-Klecks
+# =========================================================================== #
+def test_blob_crumbs_make_you_grow():
+    g = make(BlobGame, DIFFS)
+    u = g.units[0]
+    before = u["mass"]
+    u["x"], u["y"] = g.crumbs[0][0], g.crumbs[0][1]
+    g.step_world(1 / 60.0)
+    assert u["mass"] > before, "Krume brachte keine Masse"
+
+
+def test_blob_only_a_clearly_bigger_blob_can_eat():
+    """Knapp groesser reicht nicht - sonst waere jede Beruehrung toedlich."""
+    from rucurve.party.games.blob import EAT_RATIO
+
+    def bump(big_mass, small_mass):
+        g = make(BlobGame, (0.5, 0.5))
+        a, b = g.units[0], g.units[1]
+        g._set_mass(a, big_mass)
+        g._set_mass(b, small_mass)
+        a.update({"x": 800.0, "y": 450.0, "safe": 0.0})
+        b.update({"x": 800.0, "y": 450.0, "safe": 0.0})
+        g.on_contact(a, b, 0.0)
+        return a["mass"], b["mass"]
+
+    # knapp groesser: nichts passiert
+    m_big, m_small = bump(40.0, 40.0 / EAT_RATIO + 1)
+    assert m_small > 20.0, "knapp groesser hat trotzdem gefressen"
+    # deutlich groesser: gefressen
+    m_big, m_small = bump(80.0, 20.0)
+    assert m_big > 80.0, "der Groessere hat nichts bekommen"
+    assert m_small < 20.0, "der Kleinere wurde nicht zurueckgesetzt"
+
+
+def test_blob_eaten_player_comes_back_instead_of_being_out():
+    """Rausfliegen waere bei einem Minispiel von einer Minute zu hart."""
+    g = make(BlobGame, (0.5, 0.5))
+    a, b = g.units[0], g.units[1]
+    g._set_mass(a, 90.0)
+    g._set_mass(b, 20.0)
+    a.update({"x": 800.0, "y": 450.0})
+    b.update({"x": 800.0, "y": 450.0, "safe": 0.0})
+    g.on_contact(a, b, 0.0)
+    assert b["alive"], "gefressener Spieler ist raus"
+    assert b["safe"] > 0.0, "nach dem Fressen fehlt die Schonzeit"
+    assert math.dist((a["x"], a["y"]), (b["x"], b["y"])) > 100.0, (
+        "gefressener Spieler landet direkt neben dem Fresser")
+
+
+def test_blob_immunity_protects():
+    g = make(BlobGame, (0.5, 0.5))
+    a, b = g.units[0], g.units[1]
+    g._set_mass(a, 90.0)
+    g._set_mass(b, 20.0)
+    a.update({"x": 800.0, "y": 450.0})
+    b.update({"x": 800.0, "y": 450.0, "safe": 1.0})
+    g.on_contact(a, b, 0.0)
+    assert b["mass"] == 20.0, "Schonzeit hat nicht geschuetzt"
+
+
+def test_blob_bigger_is_slower():
+    """Ohne diese Bremse waere der Erste nicht mehr einzuholen."""
+    g = make(BlobGame, (0.5,))
+    u = g.units[0]
+    g._set_mass(u, 10.0)
+    fast = g._speed_of(u)
+    g._set_mass(u, 200.0)
+    slow = g._speed_of(u)
+    assert slow < fast * 0.75, "gross macht kaum langsamer (%.0f -> %.0f)" % (fast, slow)
+
+
+def test_blob_dash_costs_mass():
+    g = make(BlobGame, (0.5,))
+    u = g.units[0]
+    g._set_mass(u, 60.0)
+    u["dash"] = BlobGame.DASH_MAX
+    u["dash_left"] = 0.0
+    g._drive(u, 1 / 60.0, False, False, True)
+    assert u["mass"] < 60.0, "Schub war kostenlos"
+
+
+def test_blob_radius_follows_mass():
+    g = make(BlobGame, (0.5,))
+    u = g.units[0]
+    g._set_mass(u, 10.0)
+    small = g.unit_radius(u)
+    g._set_mass(u, 160.0)
+    assert g.unit_radius(u) > small * 1.5, "Klecks waechst nicht sichtbar"
 
 
 # =========================================================================== #

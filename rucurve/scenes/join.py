@@ -215,26 +215,47 @@ class ClientLobbyScene(BaseMenuScene):
         w, h = self.size
         self.widgets = [Button((48, h - 80, 160, 42), "Verlassen", self._leave, "ghost")]
         self._dropdowns = []
-        # Das Auswahlfeld gehoert NEBEN die eigene Zeile. Vorher standen die
-        # Felder stur ab der ersten Zeile - die eigenen Spieler stehen aber
-        # meist weiter unten, also schwebte das Feld ueber fremden Namen.
+        # Namensfeld und Auswahlfeld gehoeren NEBEN die eigene Zeile. Vorher
+        # standen die Felder stur ab der ersten Zeile - die eigenen Spieler
+        # stehen aber meist weiter unten, also schwebten sie ueber fremden
+        # Namen.
         mine = [i for i, p in enumerate(self.remote_players)
                 if p.get("client_id") == self.cid]
         for k, entry in enumerate(self._my_local):
             row = self._row_rect(mine[k]) if k < len(mine) else self._row_rect(k)
-            dd = Dropdown((row.x + 300, row.y + 3, 220, 34), _PU_OPTIONS,
+            ti = TextInput((row.x + 14, row.y + 3, 190, 34), entry["name"],
+                           (lambda t, en=entry: self._change_name(en, t)),
+                           max_len=14)
+            self.widgets.append(ti)
+            dd = Dropdown((row.x + 220, row.y + 3, 200, 34), _PU_OPTIONS,
                           entry["powerup"],
                           (lambda v, en=entry: self._change_powerup(en, v)))
             self.widgets.append(dd)
             self._dropdowns.append(dd)
 
-    def _change_powerup(self, entry, v) -> None:
-        entry["powerup"] = v
-        # pid herausfinden
+    def _my_pid(self, entry):
+        """Welche pid der Host fuer diesen eigenen Spieler fuehrt."""
         mine = [p for p in self.remote_players if p.get("client_id") == self.cid]
         idx = self._my_local.index(entry)
-        if idx < len(mine):
-            self.client.send({"type": "set_powerup", "pid": mine[idx]["pid"], "kind": v})
+        return mine[idx]["pid"] if idx < len(mine) else None
+
+    def _change_powerup(self, entry, v) -> None:
+        entry["powerup"] = v
+        pid = self._my_pid(entry)
+        if pid is not None:
+            self.client.send({"type": "set_powerup", "pid": pid, "kind": v})
+
+    def _change_name(self, entry, t) -> None:
+        entry["name"] = t
+        # Auch lokal merken, sonst heisst man beim naechsten Beitreten wieder
+        # wie der Rechner.
+        slots = self.app.config.slots
+        idx = entry.get("slot_index")
+        if idx is not None and 0 <= idx < len(slots):
+            slots[idx].name = t
+        pid = self._my_pid(entry)
+        if pid is not None and t.strip():
+            self.client.send({"type": "set_name", "pid": pid, "name": t.strip()})
 
     # ------------------------------------------------------------------ #
     def _leave(self) -> None:
@@ -333,9 +354,12 @@ class ClientLobbyScene(BaseMenuScene):
                              border_radius=T.R_SM)
             pygame.draw.rect(surf, color_for(p.get("color_index", 0)),
                              (box.x, box.y, 6, box.h), border_radius=3)
-            draw_text(surf, self.app.fonts.body_bold(16),
-                      p.get("name", "?") + (" (du)" if own else ""), T.TEXT,
-                      (box.x + 16, box.y + 4))
+            if own:
+                draw_text(surf, self.app.fonts.body(12), "du", T.ACCENT,
+                          (box.right - 26, box.y + 12))
+            else:
+                draw_text(surf, self.app.fonts.body_bold(16), p.get("name", "?"),
+                          T.TEXT, (box.x + 16, box.y + 4))
             if not own:
                 # Bei eigenen Zeilen steht dort das Auswahlfeld
                 draw_text(surf, self.app.fonts.body(13),

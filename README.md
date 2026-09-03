@@ -1,7 +1,7 @@
 # Ru-Curve
 
 Ein Partyspiel-Turnier fuer viele Leute an einem PC, ueber LAN oder **uebers
-Internet**: **zwoelf kurze Minispiele** laufen hintereinander ab, nach jedem gibt es
+Internet**: **dreizehn kurze Minispiele** laufen hintereinander ab, nach jedem gibt es
 Punkte nach Platzierung, und eine Rangliste zeigt jederzeit, wer vorn liegt. Alle
 spielen dabei gleichzeitig gegeneinander, und **Tempo entscheidet** - bei den
 Quizspielen bringt eine schnelle richtige Antwort deutlich mehr als eine spaete.
@@ -154,7 +154,8 @@ Zusammenstoss auf jedem Rechner gleich ausgeht.
 |---|---|
 | **Ru-Sumo** | Ring, in dem alle fahren - schubse die anderen hinaus. Die Aktionstaste ist ein Rammstoss, ein Treffer damit schleudert deutlich weiter. Der Ring schrumpft, es wird also zwangslaeufig eng. Gewertet wird die ueberlebte Zeit. |
 | **Ru-Jagd** | Die rot markierten Spieler sind die Faenger - **einer je fuenf Mitspieler**, bei 20 Leuten also vier. Punkte gibt es fuer jede Sekunde, in der du keiner bist. Wer gefangen wird, ist selbst dran. Faenger sind etwas schneller, und wer vorn liegt, wird bevorzugt gejagt - ein Vorsprung bleibt nie bequem. |
-| **Ru-Ernte** | Kristalle einsammeln. Der Kniff: ein Rammstoss schlaegt dem Getroffenen Kristalle aus der Hand - die Haelfte greift sich der Rammende sofort, der Rest fliegt als Splitter weg. Wer viel hat, verliert pro Treffer mehr und ist damit Zielscheibe fuers ganze Feld. |
+| **Ru-Ernte** | Kristalle einsammeln. Der Kniff: ein Rammstoss schlaegt dem Getroffenen ein paar Kristalle aus der Hand - die Haelfte greift sich der Rammende sofort, der Rest fliegt als Splitter weg. Ein Treffer kostet hoechstens vier Stueck, ein Vorsprung ist also nicht mit einem Schlag weg. |
+| **Ru-Klecks** | Wie agar.io: Krumen fressen und wachsen. Wer ein Viertel groesser ist als jemand anderes, kann ihn verschlucken - aber **gross macht langsam**, und der Schub kostet Masse. Wer gefressen wird, faengt klein wieder an statt rauszufliegen. |
 | **Ru-Rennen** | Autorennen ueber vier Runden: lenken, Aktionstaste gibt Schub. Rempler kosten Tempo. Abkuerzen quer ueber das Innenfeld bringt nichts - der Fortschritt friert dort ein, wo du die Bahn verlassen hast. |
 | **Achtung die Kurve** | Eine kurze Runde des Originalspiels - wer am laengsten ueberlebt, gewinnt. |
 
@@ -332,7 +333,7 @@ rucurve/
     ui.py              dunkle Party-Optik (Tastenkappen, Rangliste, Banner)
     registry.py        Liste aller Minispiele
     games/             reflex.py, quizzes.py, sumo.py, tag.py, harvest.py,
-                       race.py, curve_game.py
+                       blob.py, race.py, curve_game.py
   scenes/              splash (Ru-Services-Startanimation), menu, lobby,
                        settings_scene, controls, game, scoreboard,
                        join (+ Client-Lobby), client_game, arena_render,
