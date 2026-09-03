@@ -199,7 +199,7 @@ def test_disabled_games_are_skipped():
 
 
 def test_single_player_tournament():
-    scene, _ = run_tournament(["reaction", "stopbar"], n_local=1, n_bots=0, seed=5)
+    scene, _ = run_tournament(["reaction", "mash"], n_local=1, n_bots=0, seed=5)
     assert scene.phase == "over"
     assert len(scene.tour.standings()) == 1
 

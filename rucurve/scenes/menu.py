@@ -12,7 +12,7 @@ from .common import BaseMenuScene
 
 class MenuScene(BaseMenuScene):
     title = "Ru-Curve"
-    subtitle = "Turnier mit 11 Minispielen - lokal an einem PC oder zusammen im LAN"
+    subtitle = "Turnier mit vielen Minispielen - an einem PC, im WLAN oder uebers Internet"
 
     def on_enter(self) -> None:
         self.app.audio.music("menu")
@@ -21,7 +21,8 @@ class MenuScene(BaseMenuScene):
     def build(self) -> None:
         w, h = self.size
         cw = 360
-        x = (w - cw) // 2
+        # Bei breitem Fenster nach links ruecken - rechts steht die Erklaerung.
+        x = (w - cw) // 2 - (130 if w >= 940 else 0)
         y = 200
         gap = 66
 
@@ -31,8 +32,8 @@ class MenuScene(BaseMenuScene):
             y += gap
 
         add("An einem PC spielen", self._local)
-        add("Uber LAN hosten", self._host)
-        add("Uber LAN beitreten", self._join)
+        add("Spiel eroeffnen  (LAN oder Online)", self._host)
+        add("Spiel beitreten  (LAN oder Online)", self._join)
         y += 10
         add("Einstellungen", self._settings, "ghost")
         add("Steuerung", self._controls, "ghost")
@@ -86,6 +87,45 @@ class MenuScene(BaseMenuScene):
         self.app.running = False
 
     # ------------------------------------------------------------------ #
+    def _draw_mode_help(self, surf) -> None:
+        """Erklaert die drei Spielarten - "LAN" allein sagt niemandem etwas.
+
+        Steht als eigene Spalte rechts neben den Knoepfen; ist das Fenster zu
+        schmal, faellt sie weg, statt in die Knoepfe zu laufen.
+        """
+        w, h = self.size
+        fonts = self.app.fonts
+        btn = next((wd.rect for wd in self.widgets if hasattr(wd, "on_click")), None)
+        if btn is None:
+            return
+        x = btn.right + 34
+        box_w = w - x - 48
+        if box_w < 200:
+            return
+        y = btn.y - 4
+
+        draw_text(surf, fonts.body_bold(15), "Was ist was?", T.TEXT, (x, y))
+        y += 26
+        for label, text in (
+            ("An einem PC",
+             "Alle sitzen an dieser Tastatur. Jeder hat drei Tasten."),
+            ("Spiel eroeffnen",
+             "Du bist Gastgeber. Im gleichen WLAN finden dich die anderen von "
+             "allein. Von weiter weg schickst du ihnen deine Adresse - die "
+             "zeigt die Lobby oben rechts an, fuers WLAN und fuers Internet."),
+            ("Spiel beitreten",
+             "Bei jemand anderem mitspielen. Im gleichen WLAN aus der Liste "
+             "waehlen, sonst die Adresse des Gastgebers eintippen."),
+        ):
+            draw_text(surf, fonts.body_bold(13), label, T.ACCENT, (x, y))
+            y += 19
+            for line in wrap_text(fonts.body(12), text, box_w):
+                if y > h - 70:
+                    return
+                draw_text(surf, fonts.body(12), line, T.TEXT_MUTED, (x, y))
+                y += 16
+            y += 10
+
     def _draw_update_hint(self, surf) -> None:
         """Band mit Hinweis, wenn auf der Ru-Services-Seite etwas Neues liegt."""
         chk = getattr(self.app, "update_check", None)
@@ -110,6 +150,7 @@ class MenuScene(BaseMenuScene):
     def draw(self, surf) -> None:
         super().draw(surf)
         w, h = self.size
+        self._draw_mode_help(surf)
         draw_text(
             surf,
             self.app.fonts.body(14),

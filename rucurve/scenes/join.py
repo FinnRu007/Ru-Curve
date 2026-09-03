@@ -20,8 +20,8 @@ _PU_OPTIONS = PICKER_OPTIONS
 
 
 class JoinScene(BaseMenuScene):
-    title = "Uber LAN beitreten"
-    subtitle = "Gefundene Hosts im Netzwerk - oder IP-Adresse direkt eingeben"
+    title = "Spiel beitreten"
+    subtitle = "Im gleichen WLAN erscheint der Gastgeber von allein - von weiter weg seine Adresse eintippen"
 
     def __init__(self, app) -> None:
         super().__init__(app)
@@ -41,8 +41,8 @@ class JoinScene(BaseMenuScene):
         w, h = self.size
         self.widgets = [
             TextInput((48, h - 150, 300, 40), self.manual_ip,
-                      lambda t: setattr(self, "manual_ip", t), max_len=42,
-                      placeholder="IP  oder  IP:Port"),
+                      lambda t: setattr(self, "manual_ip", t), max_len=46,
+                      placeholder="Adresse vom Gastgeber, z.B. 80.133.22.100:51738"),
             Button((360, h - 150, 160, 40), "Verbinden", self._connect_manual, "primary"),
             Button((48, h - 90, 160, 40), "Zurueck", self._back, "ghost"),
         ]
@@ -108,7 +108,12 @@ class JoinScene(BaseMenuScene):
         self._host_buttons = []
         y = 150
         if not hosts:
-            draw_text(surf, self.app.fonts.body(16), "Suche im Netzwerk ...", T.TEXT_MUTED, (50, y + 4))
+            draw_text(surf, self.app.fonts.body(16),
+                      "Suche im WLAN ...", T.TEXT_MUTED, (50, y + 4))
+            draw_text(surf, self.app.fonts.body(13),
+                      "Sitzt der Gastgeber nicht im gleichen WLAN, wird er hier "
+                      "nie auftauchen - das ist normal. Dann unten seine Adresse "
+                      "eintippen.", T.TEXT_MUTED, (50, y + 30))
         for hinfo in hosts:
             box = pygame.Rect(48, y, min(760, w - 96), 52)
             pygame.draw.rect(surf, T.SURFACE, box, border_radius=T.R_SM)
@@ -151,9 +156,16 @@ class JoinScene(BaseMenuScene):
                       "IP-Eingabe geht trotzdem." % DISCOVERY_PORT,
                       T.DANGER, (48, h - 246))
 
+        draw_text(surf, fonts.body_bold(13), "Adresse vom Gastgeber eintippen:",
+                  T.TEXT, (48, h - 198))
         draw_text(surf, fonts.body(13),
-                  "Deine IP: %s   -   der Host zeigt seine Adresse in der Lobby oben rechts."
-                  % local_ip(), T.TEXT_MUTED, (48, h - 44))
+                  "Im gleichen WLAN sieht sie aus wie 192.168.x.x:51738 - "
+                  "uebers Internet wie 80.133.22.100:51738.",
+                  T.TEXT_MUTED, (48, h - 178))
+        draw_text(surf, fonts.body(13),
+                  "Deine eigene Adresse im WLAN: %s   -   der Gastgeber findet "
+                  "seine in der Lobby oben rechts." % local_ip(),
+                  T.TEXT_MUTED, (48, h - 44))
 
 
 # =========================================================================== #

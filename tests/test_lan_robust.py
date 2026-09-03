@@ -143,6 +143,45 @@ def test_beacon_reports_the_real_port_not_the_default():
         host.stop()
 
 
+def test_router_fallback_when_the_upnp_search_is_blocked():
+    """Windows blockt oft den UDP-Multicast der UPnP-Suche, obwohl der Router
+    selbst erreichbar waere - dann muss das Spiel direkt anklopfen koennen."""
+    from rucurve.net import upnp
+
+    cands = upnp.gateway_candidates()
+    assert len(cands) <= upnp.MAX_CANDIDATES, "zu viele Adressen -> zu langes Warten"
+    for c in cands:
+        assert c.count(".") == 3 and c.rsplit(".", 1)[1] in ("1", "254"), c
+
+    # all_locations() darf die Suche nicht ersetzen, sondern nur ergaenzen
+    calls = []
+    orig_disc, orig_fb = upnp.discover_locations, upnp.fallback_locations
+    try:
+        upnp.discover_locations = lambda *a, **k: (calls.append("suche") or ["X"])
+        upnp.fallback_locations = lambda *a, **k: (calls.append("direkt") or ["Y"])
+        assert upnp.all_locations() == ["X"]
+        assert calls == ["suche"], "Rueckfallebene lief, obwohl die Suche klappte"
+
+        calls.clear()
+        upnp.discover_locations = lambda *a, **k: (calls.append("suche") or [])
+        assert upnp.all_locations() == ["Y"]
+        assert calls == ["suche", "direkt"]
+    finally:
+        upnp.discover_locations, upnp.fallback_locations = orig_disc, orig_fb
+
+
+def test_upnp_failures_never_crash_the_host():
+    """Egal was der Router antwortet - das Spiel muss im LAN weiterlaufen."""
+    from rucurve.net.upnp import PortMapper
+
+    m = PortMapper(51999)
+    m.open_port = lambda: (_ for _ in ()).throw(OSError("Netz weg"))
+    m._run()
+    assert m.status == "fehlgeschlagen"
+    assert m.message
+    m.close()                     # darf ohne Freigabe nicht knallen
+
+
 if __name__ == "__main__":
     import traceback
 

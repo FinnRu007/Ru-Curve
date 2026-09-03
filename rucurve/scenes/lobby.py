@@ -26,7 +26,8 @@ class LobbyScene(BaseMenuScene):
     def __init__(self, app, mode: str = "local") -> None:
         super().__init__(app)
         self.mode = mode
-        self.title = "Lobby - lokal" if mode == "local" else "Lobby - LAN-Host"
+        self.title = ("Lobby - an einem PC" if mode == "local"
+                      else "Lobby - du bist Gastgeber")
         self.players: list[PlayerDef] = []
         self.host: GameHost | None = None
         self.beacon: Beacon | None = None
@@ -161,22 +162,23 @@ class LobbyScene(BaseMenuScene):
         self.widgets.append(Button((w - 220, by, 172, 40), "Zurueck", self._back, "ghost"))
 
     def _draw_picker(self, surf) -> None:
-        from ..party.registry import GAME_BY_ID
-
         w, h = self.size
         veil = pygame.Surface((w, h), pygame.SRCALPHA)
         veil.fill((10, 12, 20, 170))
         surf.blit(veil, (0, 0))
-        panel = self._picker_rect()
+        panel, heads, _cells = self._picker_layout()
         pygame.draw.rect(surf, T.SURFACE, panel, border_radius=T.R_LG)
         pygame.draw.rect(surf, T.BORDER, panel, width=1, border_radius=T.R_LG)
         fonts = self.app.fonts
         draw_text(surf, fonts.display(24), "Einzelnes Spiel starten", T.TEXT,
-                  (panel.x + 24, panel.y + 20))
+                  (panel.x + 24, panel.y + 18))
         draw_text(surf, fonts.body(14),
-                  "Ein Durchgang, danach geht es zurueck in die Lobby - "
-                  "alle Mitspieler im LAN sind dabei.",
-                  T.TEXT_MUTED, (panel.x + 24, panel.y + 50))
+                  "Ein Durchgang, danach zurueck in die Lobby - alle "
+                  "Mitspieler sind dabei.",
+                  T.TEXT_MUTED, (panel.x + 24, panel.y + 48))
+        for title, y in heads:
+            draw_text(surf, fonts.body_bold(13), title, T.ACCENT,
+                      (panel.x + 24, y))
         for wgt in self._picker_widgets:
             wgt.draw(surf, fonts)
 
@@ -187,7 +189,8 @@ class LobbyScene(BaseMenuScene):
         if self.mode != "host":
             if self.mode == "local":
                 draw_text(surf, fonts.body(13),
-                          "Fuer LAN/Internet: zurueck und 'Uber LAN hosten' waehlen",
+                          "Nur an diesem PC. Fuer Mitspieler woanders: zurueck "
+                          "und 'Spiel eroeffnen' waehlen",
                           T.TEXT_MUTED, (box.x + 40, 60))
             return
         if not self.host:
@@ -381,34 +384,54 @@ class LobbyScene(BaseMenuScene):
         self.app.set_scene(GameScene(self.app, session))
 
     # -- Einzelnes Minispiel -------------------------------------------
-    def _open_picker(self) -> None:
+    # Die Auswahl ist in zwei Gruppen geteilt: oben die Spiele, in denen man
+    # sich direkt in die Quere kommt, unten die, bei denen jeder fuer sich
+    # antritt. Beim Suchen ist das der Unterschied, der zaehlt.
+    def _picker_groups(self):
         from ..party.registry import ALL_GAMES
 
+        gegen = [g for g in ALL_GAMES if g.authoritative]
+        einzeln = [g for g in ALL_GAMES if not g.authoritative]
+        return (("Gegeneinander - alle gleichzeitig in einer Arena", gegen),
+                ("Jeder fuer sich - Kopf, Reflex, Merken", einzeln))
+
+    def _picker_layout(self):
+        """(Panel, [(Kopfzeile, y)], [(Spiel, Rechteck)]) - einmal gerechnet."""
+        w, h = self.size
+        pw = min(820, w - 80)
+        cols = 3 if pw >= 700 else 2
+        bw = (pw - 48 - 14 * (cols - 1)) // cols
+        bh = 50
+        heads, cells = [], []
+        y = 78
+        for title, games in self._picker_groups():
+            heads.append((title, y))
+            y += 26
+            for i, game in enumerate(games):
+                cells.append((game, pygame.Rect(24 + (i % cols) * (bw + 14),
+                                                y + (i // cols) * (bh + 8),
+                                                bw, bh)))
+            y += ((len(games) + cols - 1) // cols) * (bh + 8) + 14
+        ph = min(h - 40, y + 62)
+        panel = pygame.Rect((w - pw) // 2, (h - ph) // 2, pw, ph)
+        heads = [(t, panel.y + oy) for t, oy in heads]
+        cells = [(g, r.move(panel.x, panel.y)) for g, r in cells]
+        return panel, heads, cells
+
+    def _open_picker(self) -> None:
         self.picker_open = True
         self._picker_widgets = []
-        w, h = self.size
-        panel = self._picker_rect()
-        cols = 2
-        bw = (panel.w - 48 - 16 * (cols - 1)) // cols
-        bh = 54
-        for i, game in enumerate(ALL_GAMES):
-            cx = panel.x + 24 + (i % cols) * (bw + 16)
-            cy = panel.y + 74 + (i // cols) * (bh + 10)
+        panel, _heads, cells = self._picker_layout()
+        for game, rect in cells:
             self._picker_widgets.append(
-                Button((cx, cy, bw, bh), game.name,
+                Button(rect, game.name,
                        (lambda gid=game.id: self._start_single(gid)), "ghost"))
         self._picker_widgets.append(
-            Button((panel.centerx - 80, panel.bottom - 60, 160, 42), "Abbrechen",
+            Button((panel.centerx - 80, panel.bottom - 54, 160, 42), "Abbrechen",
                    self._close_picker, "ghost"))
 
     def _picker_rect(self) -> pygame.Rect:
-        from ..party.registry import ALL_GAMES
-
-        w, h = self.size
-        rows = (len(ALL_GAMES) + 1) // 2
-        ph = min(h - 60, 74 + rows * 64 + 80)
-        pw = min(760, w - 80)
-        return pygame.Rect((w - pw) // 2, (h - ph) // 2, pw, ph)
+        return self._picker_layout()[0]
 
     def _close_picker(self) -> None:
         self.picker_open = False

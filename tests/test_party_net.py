@@ -204,6 +204,23 @@ def test_quiz_shows_the_same_question_on_both_machines():
     assert checked > 50, "zu wenig verglichen (%d)" % checked
 
 
+def test_lan_arena_games_are_host_authoritative():
+    """Sumo, Jagd und Ernte rechnet der Host - der Client muss die anderen
+    trotzdem in Bewegung sehen und dieselben Punkte bekommen."""
+    for gid in ("sumo", "tag", "harvest"):
+        hs, cs = run_lan([gid], max_seconds=180)
+        assert hs.phase == "over", "%s: Host nicht fertig (%s)" % (gid, hs.phase)
+        rec = hs.tour.history[0]
+        assert rec.game_id == gid
+        assert all(r["done"] for r in rec.rows), "%s: nicht fuer alle gewertet" % gid
+        assert cs.tour.totals == hs.tour.totals, "%s: Punkte weichen ab" % gid
+
+        units = getattr(cs.game, "units", {})
+        assert units, "%s: Client hat keine Arena aufgebaut" % gid
+        moved = any(abs(u["x"]) > 1.0 and abs(u["y"]) > 1.0 for u in units.values())
+        assert moved, "%s: beim Client stand alles still" % gid
+
+
 def test_single_game_ends_the_tournament():
     """'Einzelnes Spiel' laeuft ueber dieselbe Turnierlogik - genau eine Runde."""
     hs, cs = run_lan(["reaction"])

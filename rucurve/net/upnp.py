@@ -75,6 +75,69 @@ def discover_locations(timeout: float = 2.5) -> list:
     return found
 
 
+# Wo Heimrouter ihre Geraetebeschreibung anbieten. Wird nur gebraucht, wenn
+# die SSDP-Suche nichts findet - das passiert oft genug, weil die Windows-
+# Firewall UDP-Multicast blockt, obwohl der Router selbst erreichbar waere.
+FALLBACK_PATHS = (
+    (49000, "/igddesc.xml"),        # FritzBox
+    (49000, "/rootDesc.xml"),
+    (5000, "/rootDesc.xml"),        # viele Speedport/Vodafone
+    (80, "/rootDesc.xml"),
+    (80, "/igd.xml"),
+    (1900, "/rootDesc.xml"),
+    (49152, "/rootDesc.xml"),
+    (8080, "/rootDesc.xml"),
+)
+
+
+# Mehr als das braucht kein Heimnetz - und begrenzt die Wartezeit, wenn ein
+# VPN-Adapter zusaetzliche Netze mitbringt.
+MAX_CANDIDATES = 4
+
+
+def gateway_candidates() -> list:
+    """Wahrscheinliche Router-Adressen im eigenen Netz (x.y.z.1 und .254)."""
+    from .discovery import local_ips
+
+    out = []
+    for ip in local_ips():
+        parts = ip.split(".")
+        if len(parts) != 4:
+            continue
+        for last in ("1", "254"):
+            cand = ".".join(parts[:3] + [last])
+            if cand != ip and cand not in out:
+                out.append(cand)
+    return out[:MAX_CANDIDATES]
+
+
+def fallback_locations(timeout: float = 1.0) -> list:
+    """Ohne SSDP: die ueblichen Adressen der Reihe nach durchprobieren."""
+    found = []
+    for host in gateway_candidates():
+        for port, path in FALLBACK_PATHS:
+            url = "http://%s:%d%s" % (host, port, path)
+            try:
+                with urllib.request.urlopen(url, timeout=timeout) as resp:
+                    if resp.status != 200:
+                        continue
+                    text = resp.read(400).decode("utf-8", "replace")
+            except (urllib.error.URLError, OSError, ValueError):
+                continue
+            if "urn:schemas-upnp-org:device" in text:
+                found.append(url)
+                break                      # pro Router reicht eine Adresse
+    return found
+
+
+def all_locations() -> list:
+    """Erst normal suchen, sonst direkt beim Router anklopfen."""
+    found = discover_locations()
+    if not found:
+        found = fallback_locations()
+    return found
+
+
 def parse_location(response: str) -> str | None:
     """LOCATION-Zeile aus einer SSDP-Antwort ziehen."""
     for line in response.splitlines():
@@ -195,7 +258,7 @@ class PortMapper:
 
     # -- die eigentliche Arbeit ----------------------------------------
     def open_port(self) -> bool:
-        for location in discover_locations():
+        for location in all_locations():
             try:
                 with urllib.request.urlopen(location, timeout=4.0) as resp:
                     xml_text = resp.read().decode("utf-8", "replace")

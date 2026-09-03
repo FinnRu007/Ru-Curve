@@ -1,7 +1,7 @@
 # Ru-Curve
 
 Ein Partyspiel-Turnier fuer viele Leute an einem PC, ueber LAN oder **uebers
-Internet**: **elf kurze Minispiele** laufen hintereinander ab, nach jedem gibt es
+Internet**: **zwoelf kurze Minispiele** laufen hintereinander ab, nach jedem gibt es
 Punkte nach Platzierung, und eine Rangliste zeigt jederzeit, wer vorn liegt. Alle
 spielen dabei gleichzeitig gegeneinander, und **Tempo entscheidet** - bei den
 Quizspielen bringt eine schnelle richtige Antwort deutlich mehr als eine spaete.
@@ -50,11 +50,11 @@ Ueber LAN werden Hosts im Netzwerk automatisch gefunden; sonst die IP eintippen
 
 ## LAN einrichten (wenn es nicht klappt)
 
-**Auf dem Host-PC:** Hauptmenü → *Über LAN hosten*. Oben rechts in der Lobby
+**Auf dem Host-PC:** Hauptmenü → *Spiel eröffnen*. Oben rechts in der Lobby
 steht groß die Adresse, z. B. `192.168.178.47:51738` — genau die geben die
 anderen ein. Der Host muss in der Lobby bleiben, bis alle drin sind.
 
-**Auf den anderen PCs:** Hauptmenü → *Über LAN beitreten*. Gefundene Hosts
+**Auf den anderen PCs:** Hauptmenü → *Spiel beitreten*. Gefundene Hosts
 erscheinen automatisch in der Liste; sonst die Adresse eintippen (`IP` oder
 `IP:Port`).
 
@@ -62,7 +62,7 @@ Häufige Stolpersteine und was die Meldung bedeutet:
 
 | Meldung | Ursache | Lösung |
 |---|---|---|
-| **Verbindung abgelehnt** | Auf dem Ziel-PC läuft kein Host | Dort *Über LAN hosten* wählen und in der Lobby bleiben |
+| **Verbindung abgelehnt** | Auf dem Ziel-PC läuft kein Host | Dort *Spiel eröffnen* wählen und in der Lobby bleiben |
 | **Keine Antwort** (Zeitüberschreitung) | Windows-Firewall blockt | Auf dem Host-PC `tools/firewall_freigeben.bat` als **Administrator** ausführen |
 | **Adresse nicht gefunden** | IP vertippt | Adresse aus der Host-Lobby abschreiben |
 | **Netzwerk nicht erreichbar** | verschiedene Netze | Beide ins selbe WLAN / an denselben Router |
@@ -79,13 +79,26 @@ Lobby verwenden statt sie zu raten.
 
 ## Uebers Internet spielen
 
-Beim *Uber LAN hosten* versucht das Spiel automatisch, den Port im Router zu
+Beim *Spiel eroeffnen* versucht das Spiel automatisch, den Port im Router zu
 oeffnen (UPnP), und zeigt in der Lobby **zwei** Adressen an:
 
 * **Im gleichen WLAN:** die lokale Adresse, z. B. `192.168.178.47:51738`
 * **Uebers Internet:** die oeffentliche Adresse, z. B. `80.133.22.100:51738`
 
-Freunde ausserhalb geben die zweite Adresse unter *Uber LAN beitreten* ein.
+Freunde ausserhalb geben die zweite Adresse unter *Spiel beitreten* ein.
+Eine automatische Suche gibt es dafuer nicht - uebers Internet kommt der
+Suchruf nicht an, die Adresse muss also durchgesagt werden. Sie wechselt bei
+vielen Anschluessen taeglich, also jedes Mal frisch aus der Lobby ablesen.
+
+Ob das an deinem Anschluss ueberhaupt geht, sagt dir
+
+```bash
+python tools/netz_pruefen.py
+```
+
+Das Werkzeug prueft drei Dinge: ob der Router per UPnP erreichbar ist, ob der
+Anschluss eine **echte** oeffentliche IPv4 hat (bei DS-Lite/CGNAT hilft keine
+Portfreigabe) und ob der Router eine selbsttaetige Freigabe zulaesst.
 Steht dort **"Port pruefen!"**, hat der Router die selbsttaetige Freigabe
 abgelehnt - das ist der Normalfall bei einer FritzBox ab Werk:
 
@@ -120,19 +133,41 @@ Countdown, danach wird gespielt, ausgewertet und Punkte verteilt:
 Gleichstand entscheidet, wer schneller war. Rechts laeuft immer die Gesamtrangliste
 mit.
 
-| # | Minispiel | Worum es geht |
-|---|---|---|
-| 1 | **Reaktion** | Eine deiner drei Tasten leuchtet auf - druecke sie so schnell wie moeglich. Zu frueh gedrueckt zaehlt als Fehler. |
-| 2 | **Merken** | Eine Tastenfolge wird vorgespielt, du druckst sie nach. Jede Stufe wird laenger. |
-| 3 | **Kopfrechnen** | 10 Aufgaben, je 5 Sekunden, drei Antworten auf deinen drei Tasten. |
-| 4 | **Flaecheninhalt** | Rechteck, Dreieck, Kreis - Flaeche bestimmen, gleiche Regeln wie beim Kopfrechnen. |
-| 5 | **Schaetzen** | Wie viele Punkte sind auf dem Feld? Vier Sekunden pro Bild. |
-| 6 | **Ausreisser finden** | Ein Feld im Raster hat eine andere Farbe - in welchem Drittel liegt es? |
-| 7 | **Haemmern** | Acht Sekunden lang so schnell wie moeglich auf die Tasten hauen. |
-| 8 | **Stopp!** | Einen hin- und herlaufenden Zeiger moeglichst genau in der Mitte anhalten. |
-| 9 | **Zeitgefuehl** | Druecken, wenn genau die geforderte Zeit vorbei ist - die Uhr verschwindet unterwegs. |
-| 10 | **Ru-Rennen** | Autorennen ueber zwei Runden: links/rechts lenken, Aktionstaste gibt Schub. Alle fahren gleichzeitig, Rempler kosten Tempo. Abkuerzen quer ueber das Innenfeld bringt nichts - der Fortschritt friert dort ein, wo du die Bahn verlassen hast. |
-| 11 | **Achtung die Kurve** | Eine kurze Runde des Originalspiels - wer am laengsten ueberlebt, gewinnt. |
+### Gegeneinander - alle gleichzeitig in einer Arena
+
+Hier passiert das, was das Turnier ausmacht: man kommt sich direkt in die
+Quere. Bei diesen Spielen rechnet der Host fuer alle, damit ein
+Zusammenstoss auf jedem Rechner gleich ausgeht.
+
+| Minispiel | Worum es geht |
+|---|---|
+| **Ru-Sumo** | Ring, in dem alle fahren - schubse die anderen hinaus. Die Aktionstaste ist ein Rammstoss, ein Treffer damit schleudert deutlich weiter. Der Ring schrumpft, es wird also zwangslaeufig eng. Gewertet wird die ueberlebte Zeit. |
+| **Ru-Jagd** | Einer ist der Faenger (rot markiert). Punkte gibt es fuer jede Sekunde, in der du es *nicht* bist. Wer gefangen wird, ist selbst dran. Der Faenger ist etwas schneller, und wer vorn liegt, wird bevorzugt gejagt - ein Vorsprung bleibt nie bequem. |
+| **Ru-Ernte** | Kristalle einsammeln. Der Kniff: ein Rammstoss schlaegt dem Getroffenen Kristalle aus der Hand - die Haelfte greift sich der Rammende sofort, der Rest fliegt als Splitter weg. Wer viel hat, verliert pro Treffer mehr und ist damit Zielscheibe fuers ganze Feld. |
+| **Ru-Rennen** | Autorennen ueber zwei Runden: lenken, Aktionstaste gibt Schub. Rempler kosten Tempo. Abkuerzen quer ueber das Innenfeld bringt nichts - der Fortschritt friert dort ein, wo du die Bahn verlassen hast. |
+| **Achtung die Kurve** | Eine kurze Runde des Originalspiels - wer am laengsten ueberlebt, gewinnt. |
+
+Alle fuenf teilen dieselbe Steuerung und dieselbe Grundlage
+(`party/arena.py` bzw. die eigene Simulation bei Kurve und Rennen):
+**links/rechts lenkt, die Aktionstaste gibt einen kurzen Schub** aus einem
+Vorrat, der sich langsam wieder auffuellt.
+
+### Jeder fuer sich - Kopf, Reflex, Merken
+
+| Minispiel | Worum es geht |
+|---|---|
+| **Reaktion** | Eine deiner drei Tasten leuchtet auf - druecke sie so schnell wie moeglich. Zu frueh gedrueckt zaehlt als Fehler. |
+| **Merken** | Eine Tastenfolge wird vorgespielt, du drueckst sie nach. Jede Stufe wird laenger. |
+| **Kopfrechnen** | 10 Aufgaben, je 5 Sekunden, drei Antworten auf deinen drei Tasten. |
+| **Flaecheninhalt** | Rechteck, Dreieck, Quadrat - und ganz oben auch der Kreis. |
+| **Schaetzen** | Wie viele Punkte sind auf dem Feld? Vier Sekunden pro Bild. |
+| **Ausreisser finden** | Ein Feld im Raster hat eine andere Farbe - in welchem Drittel liegt es? |
+| **Haemmern** | Acht Sekunden lang so schnell wie moeglich auf die Tasten hauen. |
+
+Frueher gab es hier auch **Stopp!** (einen Zeiger in der Mitte anhalten) und
+**Zeitgefuehl** (druecken, wenn die Zeit um ist). Beide sind bewusst raus:
+reine Einzelpraezision, die man genauso gut allein spielen koennte - und
+genau das soll das Turnier nicht sein.
 
 Wie das ueber LAN zusammenlaeuft: der Host wuerfelt die Aufgaben aus und schickt
 sie an alle, jede Maschine spielt ihre eigenen Leute und meldet das Ergebnis
@@ -239,6 +274,7 @@ python tests/test_lan_robust.py  # belegte Ports, Fehlermeldungen, Hostsuche
 python tests/test_party_join.py  # Lobby -> TURNIER: Mitspieler kommt wirklich mit
 python tests/test_race.py        # Ru-Rennen: Strecke, Rundenzaehlung, Bots, Rempler, Abkuerzen
 python tests/test_speed_and_updates.py  # Tempo-Wertung, Update-Hinweis, Startanimation
+python tests/test_arena.py       # Sumo, Jagd, Ernte: Stoesse, Rollen, Klauen, Netz
 python tests/test_adaptive.py    # Schwierigkeitsstufen - und dass alle dieselbe Aufgabe sehen
 python tests/test_hover.py       # jedes anklickbare Element markiert sich unter der Maus
 python tests/shots.py            # rendert alle Szenen als PNG nach tests/_shots/
@@ -263,9 +299,12 @@ rucurve/
     base.py            MiniGame-Basis, Spieler, Ergebnisse, Netz-Haken
     tournament.py      Reihenfolge, Punktevergabe, Rangliste
     quiz.py            gemeinsame Basis der Multiple-Choice-Spiele
+    arena.py           gemeinsame Basis der Echtzeitspiele (Bewegung mit drei
+                       Tasten, Stoesse, Netz, Bots)
     ui.py              dunkle Party-Optik (Tastenkappen, Rangliste, Banner)
     registry.py        Liste aller Minispiele
-    games/             reflex.py, quizzes.py, race.py, curve_game.py
+    games/             reflex.py, quizzes.py, sumo.py, tag.py, harvest.py,
+                       race.py, curve_game.py
   scenes/              splash (Ru-Services-Startanimation), menu, lobby,
                        settings_scene, controls, game, scoreboard,
                        join (+ Client-Lobby), client_game, arena_render,
@@ -273,6 +312,7 @@ rucurve/
   ui/widgets.py        handgemachte Widgets (Button, Slider, Zahlenfeld, ...)
 tools/make_assets.py   erzeugt Soundeffekte + Icon prozedural
 tools/firewall_freigeben.bat   gibt Ru-Curve in der Windows-Firewall frei
+tools/netz_pruefen.py  prueft, ob Spielen uebers Internet moeglich ist
 ```
 
 ## CI (optional)
