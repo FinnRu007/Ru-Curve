@@ -290,6 +290,23 @@ hergefahren sind. Erst ein **Klick** (oder Leertaste) führt zum Zwischenstand.
 Der ist scrollbar (Mausrad / Pfeiltasten) und zeigt ab zehn Spielern zwei
 Spalten, damit auch große Runden komplett lesbar bleiben.
 
+## Wenn Windows Defender meckert
+
+Bei mit PyInstaller gepackten Programmen kommt der Fehlalarm
+`Trojan:Win32/Wacatac.B!ml` immer wieder vor - das `!ml` steht fuer eine
+Einschaetzung durch maschinelles Lernen, keine echte Signatur.
+
+Einmal war es allerdings hausgemacht: die Zwischenablage wurde direkt ueber
+`user32` bedient (OpenClipboard, GlobalAlloc, memmove, SetClipboardData).
+Genau diese Aufruffolge nutzt Schadsoftware, die Zwischenablagen ausliest -
+Defender hat die .exe daraufhin geloescht, auch beim Download von der
+Webseite. Seit 0.7.1 laeuft das Kopieren nur noch ueber SDL, und die fertige
+Datei uebersteht eine vollstaendige Defender-Pruefung unbeanstandet.
+
+Merksatz fuers naechste Mal: **bevor eine neue Fassung hochgeht, die frisch
+gebaute .exe einmal scannen lassen** -
+`Start-MpScan -ScanPath <Ordner> -ScanType CustomScan`.
+
 ## Tests
 
 ```bash
